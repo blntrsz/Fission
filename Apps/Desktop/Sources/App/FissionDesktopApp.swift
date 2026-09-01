@@ -1,4 +1,5 @@
 import AppKit
+import FissionCore
 import SwiftUI
 
 extension Notification.Name {
@@ -21,6 +22,10 @@ final class TerminalTabsShortcutRequest {
 
 @main
 struct FissionDesktopApp: App {
+    @State private var threadListModel = ThreadListModel(
+        databasePath: ThreadListModel.applicationSupportDatabasePath
+    )
+
     private static let terminalTabsShortcutMonitor = NSEvent.addLocalMonitorForEvents(
         matching: .keyDown
     ) { event in
@@ -63,7 +68,7 @@ struct FissionDesktopApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ThreadListView()
+            ThreadListView(model: threadListModel)
                 .frame(minWidth: 900, minHeight: 560)
         }
         .commands {

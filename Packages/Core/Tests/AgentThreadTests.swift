@@ -9,6 +9,7 @@ struct AgentThreadTests {
 
         #expect(thread.title == "Research Swift concurrency")
         #expect(thread.status == .active)
+        #expect(!thread.isSettled)
         #expect(thread.createdAt == createdAt)
         #expect(thread.updatedAt == createdAt)
     }
@@ -21,10 +22,12 @@ struct AgentThreadTests {
 
         thread.transition(to: .settled, at: settledAt)
         #expect(thread.status == .settled)
+        #expect(thread.isSettled)
         #expect(thread.updatedAt == settledAt)
 
         thread.transition(to: .active, at: reopenedAt)
         #expect(thread.status == .active)
+        #expect(!thread.isSettled)
         #expect(thread.updatedAt == reopenedAt)
     }
 
@@ -40,6 +43,7 @@ struct AgentThreadTests {
 
         thread.transition(to: .completed, at: completedAt)
         #expect(thread.status == .completed)
+        #expect(!thread.isSettled)
         #expect(thread.updatedAt == completedAt)
     }
 }

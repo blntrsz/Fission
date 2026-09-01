@@ -9,24 +9,24 @@
 /* Begin PBXBuildFile section */
 		A10000000000000000000001 /* FissionDesktopApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000001 /* FissionDesktopApp.swift */; };
 		A10000000000000000000002 /* ThreadListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000002 /* ThreadListView.swift */; };
-		A10000000000000000000003 /* ThreadListViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000003 /* ThreadListViewModel.swift */; };
 		A10000000000000000000004 /* FissionCore in Frameworks */ = {isa = PBXBuildFile; productRef = A90000000000000000000001 /* FissionCore */; };
 		A10000000000000000000005 /* TerminalWorkspaceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000005 /* TerminalWorkspaceView.swift */; };
 		A10000000000000000000006 /* GhosttyTerminal in Frameworks */ = {isa = PBXBuildFile; productRef = A90000000000000000000004 /* GhosttyTerminal */; };
 		A10000000000000000000007 /* NewThreadSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000007 /* NewThreadSheet.swift */; };
 		A10000000000000000000008 /* HoverFeedback.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000008 /* HoverFeedback.swift */; };
 		A10000000000000000000009 /* ThreadHeaderTitle.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000009 /* ThreadHeaderTitle.swift */; };
+		A10000000000000000000010 /* DesktopThreadCreator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000010 /* DesktopThreadCreator.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		A20000000000000000000001 /* FissionDesktopApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FissionDesktopApp.swift; sourceTree = "<group>"; };
 		A20000000000000000000002 /* ThreadListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThreadListView.swift; sourceTree = "<group>"; };
-		A20000000000000000000003 /* ThreadListViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThreadListViewModel.swift; sourceTree = "<group>"; };
 		A20000000000000000000004 /* FissionDesktop.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = FissionDesktop.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A20000000000000000000005 /* TerminalWorkspaceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalWorkspaceView.swift; sourceTree = "<group>"; };
 		A20000000000000000000007 /* NewThreadSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewThreadSheet.swift; sourceTree = "<group>"; };
 		A20000000000000000000008 /* HoverFeedback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoverFeedback.swift; sourceTree = "<group>"; };
 		A20000000000000000000009 /* ThreadHeaderTitle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThreadHeaderTitle.swift; sourceTree = "<group>"; };
+		A20000000000000000000010 /* DesktopThreadCreator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesktopThreadCreator.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -73,9 +73,9 @@
 			isa = PBXGroup;
 			children = (
 				A20000000000000000000002 /* ThreadListView.swift */,
-				A20000000000000000000003 /* ThreadListViewModel.swift */,
 				A20000000000000000000007 /* NewThreadSheet.swift */,
 				A20000000000000000000009 /* ThreadHeaderTitle.swift */,
+				A20000000000000000000010 /* DesktopThreadCreator.swift */,
 			);
 			path = Threads;
 			sourceTree = "<group>";
@@ -174,11 +174,11 @@
 			files = (
 				A10000000000000000000001 /* FissionDesktopApp.swift in Sources */,
 				A10000000000000000000002 /* ThreadListView.swift in Sources */,
-				A10000000000000000000003 /* ThreadListViewModel.swift in Sources */,
 				A10000000000000000000005 /* TerminalWorkspaceView.swift in Sources */,
 				A10000000000000000000007 /* NewThreadSheet.swift in Sources */,
 				A10000000000000000000008 /* HoverFeedback.swift in Sources */,
 				A10000000000000000000009 /* ThreadHeaderTitle.swift in Sources */,
+				A10000000000000000000010 /* DesktopThreadCreator.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

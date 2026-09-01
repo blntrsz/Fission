@@ -54,7 +54,7 @@ private struct ThreadRecord: Codable, FetchableRecord, PersistableRecord, Sendab
 }
 
 /// A SQLite-backed Thread repository. GRDB serializes access through its database queue.
-public actor SQLiteThreadRepository: ThreadRepository {
+public actor SQLiteThreadRepository {
     private let database: DatabaseQueue
 
     public init(path: String) throws {

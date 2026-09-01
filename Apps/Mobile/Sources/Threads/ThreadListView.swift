@@ -2,7 +2,7 @@ import FissionCore
 import SwiftUI
 
 struct ThreadListView: View {
-    @State private var model = ThreadListViewModel()
+    let model: ThreadListModel
     @State private var isCreatingThread = false
     @State private var newThreadTitle = ""
     @State private var searchText = ""
@@ -295,11 +295,11 @@ struct ThreadListView: View {
     }
 
     private var activeThreads: [AgentThread] {
-        displayedThreads.filter { $0.status == .active }
+        displayedThreads.filter { !$0.isSettled }
     }
 
     private var settledThreads: [AgentThread] {
-        displayedThreads.filter { $0.status != .active }
+        displayedThreads.filter(\.isSettled)
     }
 
     private var displayedThreads: [AgentThread] {
@@ -439,5 +439,5 @@ private struct ThreadRow: View {
 }
 
 #Preview {
-    ThreadListView()
+    ThreadListView(model: ThreadListModel(databasePath: ":memory:"))
 }

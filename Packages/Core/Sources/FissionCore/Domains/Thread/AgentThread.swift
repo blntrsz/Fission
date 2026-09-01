@@ -17,6 +17,8 @@ public struct AgentThread: Identifiable, Hashable, Sendable {
     public let createdAt: Date
     public private(set) var updatedAt: Date
 
+    public var isSettled: Bool { status == .settled }
+
     public init(
         id: UUID = UUID(),
         title: String,

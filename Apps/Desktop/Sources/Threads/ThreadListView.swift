@@ -2,7 +2,7 @@ import FissionCore
 import SwiftUI
 
 struct ThreadListView: View {
-    @State private var model = ThreadListViewModel()
+    let model: ThreadListModel
     @State private var workspaceStore = ThreadWorkspaceStore()
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var selectedThreadID: UUID?
@@ -30,7 +30,7 @@ struct ThreadListView: View {
         }
         .onChange(of: selectedThreadID) { _, threadID in
             guard let thread = model.threads.first(where: {
-                $0.id == threadID && $0.status != .settled
+                $0.id == threadID && !$0.isSettled
             }) else {
                 return
             }
@@ -141,11 +141,11 @@ struct ThreadListView: View {
         model.threads.first { $0.id == selectedThreadID }
     }
     private var activeThreads: [AgentThread] {
-        model.threads.filter { $0.status != .settled }
+        model.threads.filter { !$0.isSettled }
     }
 
     private var settledThreads: [AgentThread] {
-        model.threads.filter { $0.status == .settled }
+        model.threads.filter(\.isSettled)
     }
 
     private var settledThreadsAccordion: some View {
@@ -204,7 +204,8 @@ struct ThreadListView: View {
         isCreatingThread = false
 
         Task {
-            if let threadID = await model.createThread(
+            if let threadID = await DesktopThreadCreator.create(
+                in: model,
                 title: name,
                 workingDirectory: directory.path,
                 createWorktree: createWorktree
@@ -217,7 +218,7 @@ struct ThreadListView: View {
     private func synchronizeWorkspaces(with threads: [AgentThread]) {
         workspaceStore.synchronize(threads: threads)
 
-        let availableThreads = threads.filter { $0.status != .settled }
+        let availableThreads = threads.filter { !$0.isSettled }
         if let selectedThreadID,
            availableThreads.contains(where: { $0.id == selectedThreadID }) {
             return
@@ -265,7 +266,7 @@ private struct ThreadRow: View {
             GitBranchLabel(workingDirectory: thread.workingDirectory)
         }
         .padding(.bottom, 6)
-        .opacity(thread.status == .settled ? 0.48 : 1)
+        .opacity(thread.isSettled ? 0.48 : 1)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background {
             RoundedRectangle(cornerRadius: 7)
@@ -274,7 +275,7 @@ private struct ThreadRow: View {
         }
         .onHover { isHovering = $0 }
         .contextMenu {
-            if thread.status == .settled {
+            if thread.isSettled {
                 Button("Reopen", systemImage: "arrow.uturn.backward", action: reopen)
             } else {
                 Button("Snooze", systemImage: "clock") {}
@@ -286,7 +287,7 @@ private struct ThreadRow: View {
 
     @ViewBuilder
     private var actions: some View {
-        if thread.status == .settled {
+        if thread.isSettled {
             Button("Reopen", systemImage: "arrow.uturn.backward", action: reopen)
                 .labelStyle(.iconOnly)
                 .buttonStyle(.borderless)
@@ -393,5 +394,5 @@ private enum GitBranchResolver {
 }
 
 #Preview {
-    ThreadListView()
+    ThreadListView(model: ThreadListModel(databasePath: ":memory:"))
 }

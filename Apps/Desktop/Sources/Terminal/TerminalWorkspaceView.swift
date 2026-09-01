@@ -14,7 +14,7 @@ final class ThreadWorkspaceStore {
     }
 
     func synchronize(threads: [AgentThread]) {
-        let availableThreads = threads.filter { $0.status != .settled }
+        let availableThreads = threads.filter { !$0.isSettled }
         let threadIDs = Set(availableThreads.map(\.id))
         workspaces.removeAll { !threadIDs.contains($0.threadID) }
 
