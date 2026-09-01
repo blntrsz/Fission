@@ -68,6 +68,11 @@ final class TerminalTabsViewModel: Identifiable {
         tabs.first(where: { $0.id == tabID })?.state.requestFocus()
     }
 
+    func selectTab(at index: Int) {
+        guard tabs.indices.contains(index) else { return }
+        select(tabID: tabs[index].id)
+    }
+
     func close(tabID: UUID) {
         guard let index = tabs.firstIndex(where: { $0.id == tabID }) else { return }
         let wasSelected = selectedTabID == tabID
@@ -251,11 +256,40 @@ struct TerminalWorkspaceView: View {
             terminalStack
         }
         .background(Color(nsColor: .windowBackgroundColor))
+        .focusedSceneValue(
+            \.terminalTabsActions,
+            isVisible
+                ? TerminalTabsActions(
+                    tabCount: model.tabs.count,
+                    addTab: { model.addTab() },
+                    selectTab: { model.selectTab(at: $0) }
+                )
+                : nil
+        )
         .onAppear { model.setWorkspaceVisible(isVisible) }
         .onChange(of: isVisible) { _, visible in
             model.setWorkspaceVisible(visible)
             if visible, let selectedTabID = model.selectedTabID {
                 model.select(tabID: selectedTabID)
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .terminalTabsShortcut)) {
+            notification in
+            guard isVisible,
+                  let request = notification.object as? TerminalTabsShortcutRequest
+            else {
+                return
+            }
+
+            switch request.action {
+            case .addTab:
+                request.isHandled = true
+                model.addTab()
+            case let .selectTab(index) where model.tabs.indices.contains(index):
+                request.isHandled = true
+                model.selectTab(at: index)
+            case .selectTab:
+                break
             }
         }
     }
@@ -311,6 +345,7 @@ private struct TerminalTabButton: View {
 
     @State private var isRenaming = false
     @State private var proposedTitle = ""
+    @State private var isHovering = false
 
     init(
         tab: TerminalTab,
@@ -325,11 +360,22 @@ private struct TerminalTabButton: View {
     }
 
     var body: some View {
-        HStack(spacing: 7) {
+        ZStack(alignment: .trailing) {
             Button(action: select) {
-                Text(tab.title)
-                    .lineLimit(1)
-                    .frame(maxWidth: 150, alignment: .leading)
+                HStack(spacing: 7) {
+                    Text(tab.title)
+                        .lineLimit(1)
+                        .frame(maxWidth: 150, alignment: .leading)
+
+                    // Reserve the close button's space while keeping the entire
+                    // visible tab as the selection button's hit target.
+                    Color.clear
+                        .frame(width: 15, height: 15)
+                        .accessibilityHidden(true)
+                }
+                .padding(.horizontal, 10)
+                .frame(height: 28)
+                .contentShape(RoundedRectangle(cornerRadius: 7))
             }
             .buttonStyle(.plain)
 
@@ -339,13 +385,14 @@ private struct TerminalTabButton: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .hoverFeedback()
+                .padding(.trailing, 6)
         }
-        .padding(.horizontal, 10)
-        .frame(height: 28)
         .background(
-            isSelected ? Color.primary.opacity(0.12) : Color.clear,
+            Color.primary.opacity(isSelected ? 0.12 : (isHovering ? 0.07 : 0)),
             in: RoundedRectangle(cornerRadius: 7)
         )
+        .contentShape(RoundedRectangle(cornerRadius: 7))
+        .onHover { isHovering = $0 }
         .contextMenu {
             Button("Rename…", systemImage: "pencil") {
                 beginRenaming()

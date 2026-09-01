@@ -60,6 +60,45 @@ fi
 open -n "$APP_PATH"
 '''
 
+[tasks."desktop:package"]
+description = "Build the macOS app in Release mode and package it as a DMG"
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+
+DERIVED_DATA="Apps/Desktop/.derivedData"
+APP_PATH="$DERIVED_DATA/Build/Products/Release/FissionDesktop.app"
+DIST_DIR="dist"
+DMG_ROOT="$DIST_DIR/.dmg-root"
+DMG_PATH="$DIST_DIR/Fission.dmg"
+
+xcodebuild \
+  -project Apps/Desktop/FissionDesktop.xcodeproj \
+  -scheme FissionDesktop \
+  -configuration Release \
+  -destination 'generic/platform=macOS' \
+  -derivedDataPath "$DERIVED_DATA" \
+  build
+
+rm -rf "$DMG_ROOT"
+mkdir -p "$DMG_ROOT"
+trap 'rm -rf "$DMG_ROOT"' EXIT
+
+ditto "$APP_PATH" "$DMG_ROOT/FissionDesktop.app"
+ln -s /Applications "$DMG_ROOT/Applications"
+
+mkdir -p "$DIST_DIR"
+rm -f "$DMG_PATH"
+hdiutil create \
+  -volname Fission \
+  -srcfolder "$DMG_ROOT" \
+  -format UDZO \
+  -ov \
+  "$DMG_PATH"
+
+echo "Created $DMG_PATH"
+'''
+
 [tasks.mobile]
 description = "Run the iOS app and rebuild it when Swift sources change"
 run = '''

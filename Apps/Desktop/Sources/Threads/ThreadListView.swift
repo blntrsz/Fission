@@ -39,7 +39,7 @@ struct ThreadListView: View {
         .sheet(isPresented: $isCreatingThread) {
             NewThreadSheet(
                 recentPaths: recentProjectPaths,
-                create: createThread(in:name:),
+                create: createThread(in:name:createWorktree:),
                 cancel: { isCreatingThread = false }
             )
         }
@@ -194,7 +194,11 @@ struct ThreadListView: View {
         }
     }
 
-    private func createThread(in directory: URL, name: String) {
+    private func createThread(
+        in directory: URL,
+        name: String,
+        createWorktree: Bool
+    ) {
         RecentProjectPaths.record(directory)
         recentProjectPaths = RecentProjectPaths.load()
         isCreatingThread = false
@@ -202,7 +206,8 @@ struct ThreadListView: View {
         Task {
             if let threadID = await model.createThread(
                 title: name,
-                workingDirectory: directory.path
+                workingDirectory: directory.path,
+                createWorktree: createWorktree
             ) {
                 selectedThreadID = threadID
             }

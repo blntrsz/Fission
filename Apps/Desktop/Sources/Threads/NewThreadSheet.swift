@@ -2,12 +2,13 @@ import SwiftUI
 
 struct NewThreadSheet: View {
     let recentPaths: [String]
-    let create: (URL, String) -> Void
+    let create: (URL, String, Bool) -> Void
     let cancel: () -> Void
 
     @State private var threadName = ""
     @State private var query = ""
     @State private var selectedIndex = 0
+    @AppStorage("createThreadsInNewWorktree") private var createInNewWorktree = false
     @FocusState private var focusedField: Field?
 
     var body: some View {
@@ -52,12 +53,16 @@ struct NewThreadSheet: View {
 
                 Spacer()
 
-                Button("Close", systemImage: "xmark", action: cancel)
-                    .labelStyle(.iconOnly)
-                    .buttonStyle(.plain)
-                    .font(.headline)
-                    .padding(8)
-                    .background(.quaternary, in: Circle())
+                Button(action: cancel) {
+                    Image(systemName: "xmark")
+                        .font(.headline)
+                        .padding(8)
+                        .contentShape(Circle())
+                        .background(.quaternary, in: Circle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Close")
+                .help("Close")
             }
 
             field(
@@ -75,6 +80,17 @@ struct NewThreadSheet: View {
                 text: $query,
                 focus: .project
             )
+
+            Toggle(isOn: $createInNewWorktree) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Create in a new worktree")
+                        .font(.body.weight(.medium))
+                    Text("Create an isolated Git branch and use its checkout for this Thread.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .toggleStyle(.switch)
         }
         .padding(24)
     }
@@ -266,7 +282,7 @@ struct NewThreadSheet: View {
 
     private func createSelectedProject() {
         guard projects.indices.contains(selectedIndex), !trimmedThreadName.isEmpty else { return }
-        create(projects[selectedIndex].url, trimmedThreadName)
+        create(projects[selectedIndex].url, trimmedThreadName, createInNewWorktree)
     }
 }
 

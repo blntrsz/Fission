@@ -30,3 +30,15 @@ Launch the built app from Xcode or with:
 ```bash
 open Apps/Desktop/.derivedData/Build/Products/Debug/FissionDesktop.app
 ```
+
+## Package
+
+Build an optimized universal macOS app and package it as a drag-to-Applications DMG:
+
+```bash
+mise run desktop:package
+```
+
+The resulting disk image is written to `dist/Fission.dmg`.
+
+The default build uses an ad-hoc signature, which is suitable for local installation. Distribution to other users without Gatekeeper warnings requires signing with a Developer ID Application certificate and notarizing the disk image through Apple.
