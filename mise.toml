@@ -1,0 +1,128 @@
+min_version = "2024.9.5"
+
+[tools]
+swiftlint = "latest"
+watchexec = "latest"
+
+[tasks.lint]
+description = "Lint Swift sources"
+run = "swiftlint lint --strict"
+
+[tasks."lint:fix"]
+description = "Automatically fix SwiftLint violations where possible"
+run = "swiftlint lint --fix"
+
+[tasks.desktop]
+description = "Run the macOS app and rebuild it when Swift sources change"
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+
+exec watchexec \
+  --restart \
+  --project-origin . \
+  --watch Apps/Desktop/Sources \
+  --watch Apps/Desktop/FissionDesktop.xcodeproj/project.pbxproj \
+  --watch Packages/Core/Sources \
+  --watch Packages/Core/Package.swift \
+  -- mise run desktop:launch
+'''
+
+[tasks."desktop:launch"]
+description = "Build and launch the macOS app in Debug mode once"
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+
+DERIVED_DATA="Apps/Desktop/.derivedData"
+APP_PATH="$DERIVED_DATA/Build/Products/Debug/FissionDesktop.app"
+
+xcodebuild \
+  -project Apps/Desktop/FissionDesktop.xcodeproj \
+  -scheme FissionDesktop \
+  -configuration Debug \
+  -destination 'platform=macOS' \
+  -derivedDataPath "$DERIVED_DATA" \
+  build
+
+# Ensure `open` starts the newly built binary rather than activating an older one.
+# LaunchServices can return -600 if asked to reopen the app while its previous
+# process is still terminating.
+pkill -x FissionDesktop 2>/dev/null || true
+for _ in $(seq 1 100); do
+  pgrep -x FissionDesktop >/dev/null || break
+  sleep 0.05
+done
+if pgrep -x FissionDesktop >/dev/null; then
+  echo "FissionDesktop did not terminate within 5 seconds" >&2
+  exit 1
+fi
+open -n "$APP_PATH"
+'''
+
+[tasks.mobile]
+description = "Run the iOS app and rebuild it when Swift sources change"
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+
+exec watchexec \
+  --restart \
+  --project-origin . \
+  --watch Apps/Mobile/Sources \
+  --watch Apps/Mobile/FissionMobile.xcodeproj/project.pbxproj \
+  --watch Packages/Core/Sources \
+  --watch Packages/Core/Package.swift \
+  -- mise run mobile:launch
+'''
+
+[tasks."mobile:launch"]
+description = "Build and launch the iOS app in a Simulator in Debug mode once"
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+
+SIMULATOR_NAME="${IOS_SIMULATOR:-iPhone 17 Pro}"
+DERIVED_DATA="Apps/Mobile/.derivedData"
+APP_PATH="$DERIVED_DATA/Build/Products/Debug-iphonesimulator/FissionMobile.app"
+BUNDLE_ID="com.fission.mobile"
+
+SIMULATOR_ID="$(
+  xcrun simctl list devices available --json | \
+    IOS_SIMULATOR_NAME="$SIMULATOR_NAME" python3 -c '
+import json
+import os
+import re
+import sys
+
+name = os.environ["IOS_SIMULATOR_NAME"]
+runtimes = json.load(sys.stdin)["devices"]
+matches = []
+for runtime, devices in runtimes.items():
+    version = tuple(int(part) for part in re.findall(r"iOS-(.*)$", runtime)[0].split("-")) if "iOS-" in runtime else ()
+    for device in devices:
+        if device["name"] == name and device.get("isAvailable", True):
+            matches.append((version, device["udid"]))
+
+if not matches:
+    raise SystemExit(f"No available iOS Simulator named {name!r}")
+print(max(matches)[1])
+'
+)"
+
+echo "Using $SIMULATOR_NAME ($SIMULATOR_ID)"
+open -a Simulator
+xcrun simctl boot "$SIMULATOR_ID" 2>/dev/null || true
+xcrun simctl bootstatus "$SIMULATOR_ID" -b
+
+xcodebuild \
+  -project Apps/Mobile/FissionMobile.xcodeproj \
+  -scheme FissionMobile \
+  -configuration Debug \
+  -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \
+  -derivedDataPath "$DERIVED_DATA" \
+  build
+
+xcrun simctl install "$SIMULATOR_ID" "$APP_PATH"
+xcrun simctl launch --terminate-running-process "$SIMULATOR_ID" "$BUNDLE_ID"
+'''

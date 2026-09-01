@@ -1,0 +1,370 @@
+import FissionCore
+import GhosttyTerminal
+import Observation
+import SwiftUI
+
+@MainActor
+@Observable
+final class ThreadWorkspaceStore {
+    private(set) var workspaces: [TerminalTabsViewModel] = []
+
+    func open(thread: AgentThread) {
+        guard !workspaces.contains(where: { $0.threadID == thread.id }) else { return }
+        workspaces.append(TerminalTabsViewModel(thread: thread))
+    }
+
+    func synchronize(threads: [AgentThread]) {
+        let availableThreads = threads.filter { $0.status != .settled }
+        let threadIDs = Set(availableThreads.map(\.id))
+        workspaces.removeAll { !threadIDs.contains($0.threadID) }
+
+        for workspace in workspaces {
+            if let thread = availableThreads.first(where: { $0.id == workspace.threadID }) {
+                workspace.update(thread: thread)
+            }
+        }
+    }
+}
+
+@MainActor
+@Observable
+final class TerminalTabsViewModel: Identifiable {
+    nonisolated let id: UUID
+    nonisolated let threadID: UUID
+    private(set) var threadTitle: String
+    private(set) var workingDirectory: String?
+    private(set) var tabs: [TerminalTab] = []
+    var selectedTabID: UUID?
+    private var nextTabNumber = 1
+
+    init(thread: AgentThread) {
+        id = thread.id
+        threadID = thread.id
+        threadTitle = thread.title
+        workingDirectory = thread.workingDirectory
+        addTab()
+    }
+
+    func update(thread: AgentThread) {
+        threadTitle = thread.title
+        workingDirectory = thread.workingDirectory
+    }
+
+    func addTab() {
+        let tab = TerminalTab(number: nextTabNumber, workingDirectory: workingDirectory)
+        nextTabNumber += 1
+        tab.state.onClose = { [weak self, weak tab] _ in
+            guard let tab else { return }
+            self?.close(tabID: tab.id)
+        }
+        tabs.append(tab)
+        select(tabID: tab.id)
+    }
+
+    func select(tabID: UUID) {
+        guard tabs.contains(where: { $0.id == tabID }) else { return }
+        selectedTabID = tabID
+        updateVisibility()
+        tabs.first(where: { $0.id == tabID })?.state.requestFocus()
+    }
+
+    func close(tabID: UUID) {
+        guard let index = tabs.firstIndex(where: { $0.id == tabID }) else { return }
+        let wasSelected = selectedTabID == tabID
+        tabs.remove(at: index)
+
+        if tabs.isEmpty {
+            addTab()
+        } else if wasSelected {
+            select(tabID: tabs[min(index, tabs.count - 1)].id)
+        } else {
+            updateVisibility()
+        }
+    }
+
+    func setWorkspaceVisible(_ visible: Bool) {
+        for tab in tabs {
+            tab.state.isSurfaceVisible = visible && tab.id == selectedTabID
+        }
+    }
+
+    private func updateVisibility() {
+        for tab in tabs {
+            tab.state.isSurfaceVisible = tab.id == selectedTabID
+        }
+    }
+}
+
+@MainActor
+@Observable
+final class TerminalTab: Identifiable {
+    nonisolated let id = UUID()
+    private(set) var title: String
+    let state: TerminalViewState
+
+    init(number: Int, workingDirectory: String?) {
+        title = "Tab \(number)"
+        state = TerminalViewState(
+            configSource: GhosttyUserConfiguration.source,
+            // Preserve colors from Ghostty's config instead of overlaying the
+            // package's default Alabaster/Afterglow theme.
+            theme: TerminalTheme()
+        )
+        state.configuration = TerminalSurfaceOptions(
+            backend: .exec,
+            workingDirectory: workingDirectory,
+            context: .window,
+            resizeThrottleMilliseconds: 16
+        )
+    }
+
+    func rename(to proposedTitle: String) {
+        let trimmedTitle = proposedTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedTitle.isEmpty else { return }
+        title = trimmedTitle
+    }
+}
+
+private enum GhosttyUserConfiguration {
+    static var source: TerminalController.ConfigSource {
+        let fileManager = FileManager.default
+        let homeDirectory = fileManager.homeDirectoryForCurrentUser
+
+        let xdgDirectory: URL
+        if let configuredDirectory = ProcessInfo.processInfo.environment["XDG_CONFIG_HOME"],
+           configuredDirectory.hasPrefix("/")
+        {
+            xdgDirectory = URL(fileURLWithPath: configuredDirectory, isDirectory: true)
+        } else {
+            xdgDirectory = homeDirectory.appendingPathComponent(".config", isDirectory: true)
+        }
+
+        let xdgGhosttyDirectory = xdgDirectory.appendingPathComponent("ghostty", isDirectory: true)
+        let appSupportDirectory = homeDirectory
+            .appendingPathComponent("Library/Application Support", isDirectory: true)
+            .appendingPathComponent("com.mitchellh.ghostty", isDirectory: true)
+
+        // This is Ghostty's load order: legacy before current, XDG before
+        // macOS Application Support. Later files override earlier files.
+        let candidates = [
+            xdgGhosttyDirectory.appendingPathComponent("config"),
+            xdgGhosttyDirectory.appendingPathComponent("config.ghostty"),
+            appSupportDirectory.appendingPathComponent("config"),
+            appSupportDirectory.appendingPathComponent("config.ghostty"),
+        ]
+        let existingPaths = candidates
+            .map(\.path)
+            .filter { fileManager.fileExists(atPath: $0) }
+
+        guard !existingPaths.isEmpty else { return .none }
+
+        let rewrittenFiles = existingPaths.compactMap { path -> String? in
+            guard let contents = try? String(contentsOfFile: path, encoding: .utf8) else {
+                return nil
+            }
+            return resolveBundledThemes(in: contents)
+        }
+
+        guard rewrittenFiles.count == existingPaths.count else {
+            // Let Ghostty report the unreadable file rather than silently
+            // dropping part of the user's configuration.
+            return .file(existingPaths.last!)
+        }
+
+        return .generated(rewrittenFiles.joined(separator: "\n"))
+    }
+
+    private static func resolveBundledThemes(in config: String) -> String {
+        config
+            .split(separator: "\n", omittingEmptySubsequences: false)
+            .map { line -> String in
+                let line = String(line)
+                guard let equalsIndex = line.firstIndex(of: "="),
+                      line[..<equalsIndex].trimmingCharacters(in: .whitespaces) == "theme"
+                else {
+                    return line
+                }
+
+                let valueStart = line.index(after: equalsIndex)
+                let value = line[valueStart...].trimmingCharacters(in: .whitespaces)
+                guard let resolvedValue = resolveThemeValue(value) else { return line }
+                return "theme = \(resolvedValue)"
+            }
+            .joined(separator: "\n")
+    }
+
+    private static func resolveThemeValue(_ value: String) -> String? {
+        if value.contains(",") || value.hasPrefix("light:") || value.hasPrefix("dark:") {
+            let entries = value.split(separator: ",", omittingEmptySubsequences: false)
+            let resolvedEntries = entries.compactMap { entry -> String? in
+                guard let colonIndex = entry.firstIndex(of: ":") else { return nil }
+                let mode = entry[..<colonIndex].trimmingCharacters(in: .whitespaces)
+                let nameStart = entry.index(after: colonIndex)
+                let name = entry[nameStart...].trimmingCharacters(in: .whitespaces)
+                guard (mode == "light" || mode == "dark"),
+                      let path = installedThemePath(named: name)
+                else {
+                    return nil
+                }
+                return "\(mode):\(path)"
+            }
+            guard resolvedEntries.count == entries.count else { return nil }
+            return resolvedEntries.joined(separator: ",")
+        }
+
+        return installedThemePath(named: value)
+    }
+
+    private static func installedThemePath(named name: String) -> String? {
+        let unquotedName = name.trimmingCharacters(in: CharacterSet(charactersIn: "\""))
+        guard !unquotedName.hasPrefix("/") else { return unquotedName }
+        guard let ghosttyURL = NSWorkspace.shared.urlForApplication(
+            withBundleIdentifier: "com.mitchellh.ghostty"
+        ) else {
+            return nil
+        }
+
+        let themesDirectory = ghosttyURL
+            .appendingPathComponent("Contents/Resources/ghostty/themes", isDirectory: true)
+        guard let themeNames = try? FileManager.default.contentsOfDirectory(
+            atPath: themesDirectory.path
+        ),
+            let matchingName = themeNames.first(where: {
+                $0.compare(unquotedName, options: [.caseInsensitive]) == .orderedSame
+            })
+        else {
+            return nil
+        }
+
+        return themesDirectory.appendingPathComponent(matchingName).path
+    }
+}
+
+struct TerminalWorkspaceView: View {
+    @Bindable var model: TerminalTabsViewModel
+    let isVisible: Bool
+
+    var body: some View {
+        VStack(spacing: 0) {
+            tabBar
+            Divider()
+            terminalStack
+        }
+        .background(Color(nsColor: .windowBackgroundColor))
+        .onAppear { model.setWorkspaceVisible(isVisible) }
+        .onChange(of: isVisible) { _, visible in
+            model.setWorkspaceVisible(visible)
+            if visible, let selectedTabID = model.selectedTabID {
+                model.select(tabID: selectedTabID)
+            }
+        }
+    }
+
+    private var tabBar: some View {
+        HStack(spacing: 4) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 4) {
+                    ForEach(model.tabs) { tab in
+                        TerminalTabButton(
+                            tab: tab,
+                            isSelected: model.selectedTabID == tab.id,
+                            select: { model.select(tabID: tab.id) },
+                            close: { model.close(tabID: tab.id) }
+                        )
+                    }
+                }
+                .padding(.horizontal, 8)
+            }
+
+            Button("New Terminal", systemImage: "plus") {
+                model.addTab()
+            }
+            .labelStyle(.iconOnly)
+            .buttonStyle(.borderless)
+            .hoverFeedback()
+            .help("New Terminal")
+            .padding(.trailing, 10)
+        }
+        .frame(height: 38)
+        .background(.bar)
+    }
+
+    private var terminalStack: some View {
+        ZStack {
+            ForEach(model.tabs) { tab in
+                TerminalSurfaceView(context: tab.state)
+                    .opacity(model.selectedTabID == tab.id ? 1 : 0)
+                    .allowsHitTesting(model.selectedTabID == tab.id)
+                    .accessibilityHidden(model.selectedTabID != tab.id)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .clipped()
+    }
+}
+
+private struct TerminalTabButton: View {
+    @Bindable var tab: TerminalTab
+    let isSelected: Bool
+    let select: () -> Void
+    let close: () -> Void
+
+    @State private var isRenaming = false
+    @State private var proposedTitle = ""
+
+    init(
+        tab: TerminalTab,
+        isSelected: Bool,
+        select: @escaping () -> Void,
+        close: @escaping () -> Void
+    ) {
+        self.tab = tab
+        self.isSelected = isSelected
+        self.select = select
+        self.close = close
+    }
+
+    var body: some View {
+        HStack(spacing: 7) {
+            Button(action: select) {
+                Text(tab.title)
+                    .lineLimit(1)
+                    .frame(maxWidth: 150, alignment: .leading)
+            }
+            .buttonStyle(.plain)
+
+            Button("Close Terminal", systemImage: "xmark", action: close)
+                .labelStyle(.iconOnly)
+                .buttonStyle(.plain)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .hoverFeedback()
+        }
+        .padding(.horizontal, 10)
+        .frame(height: 28)
+        .background(
+            isSelected ? Color.primary.opacity(0.12) : Color.clear,
+            in: RoundedRectangle(cornerRadius: 7)
+        )
+        .contextMenu {
+            Button("Rename…", systemImage: "pencil") {
+                beginRenaming()
+            }
+            Button("Close", systemImage: "xmark", action: close)
+        }
+        .alert("Rename Tab", isPresented: $isRenaming) {
+            TextField("Tab name", text: $proposedTitle)
+            Button("Cancel", role: .cancel) {}
+            Button("Rename") {
+                tab.rename(to: proposedTitle)
+            }
+        } message: {
+            Text("Choose a name for this terminal tab.")
+        }
+    }
+
+    private func beginRenaming() {
+        proposedTitle = tab.title
+        isRenaming = true
+    }
+}

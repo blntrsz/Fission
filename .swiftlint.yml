@@ -1,0 +1,27 @@
+included:
+  - Apps
+  - Packages
+
+excluded:
+  - Apps/Desktop/.derivedData
+  - Apps/Mobile/.derivedData
+  - Packages/Core/.build
+
+baseline: .swiftlint-baseline.json
+reporter: xcode
+
+opt_in_rules:
+  - empty_count
+  - empty_string
+  - first_where
+  - sorted_imports
+
+line_length:
+  warning: 120
+  error: 160
+  ignores_comments: true
+  ignores_urls: true
+
+identifier_name:
+  min_length:
+    warning: 2

@@ -1,0 +1,3 @@
+[submodule ".agents/references/ghostty"]
+	path = .agents/references/ghostty
+	url = git@github.com:ghostty-org/ghostty.git
