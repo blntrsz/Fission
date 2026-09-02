@@ -9,13 +9,32 @@ enum DesktopThreadCreator {
         workingDirectory: String,
         createWorktree: Bool
     ) async -> UUID? {
+        await create(
+            in: model,
+            workingDirectory: workingDirectory,
+            createWorktree: createWorktree,
+            worktreeRoot: FileManager.default.homeDirectoryForCurrentUser
+                .appending(path: ".fission/worktrees", directoryHint: .isDirectory),
+            makeIdentifier: randomIdentifier
+        )
+    }
+
+    @MainActor
+    static func create(
+        in model: ThreadListModel,
+        workingDirectory: String,
+        createWorktree: Bool,
+        worktreeRoot: URL,
+        makeIdentifier: @escaping @Sendable () -> String
+    ) async -> UUID? {
         let threadID = UUID()
 
         do {
             let resolvedWorkingDirectory = if createWorktree {
                 try await makeWorktree(
                     from: workingDirectory,
-                    threadID: threadID
+                    worktreeRoot: worktreeRoot,
+                    makeIdentifier: makeIdentifier
                 )
             } else {
                 workingDirectory
@@ -35,19 +54,22 @@ enum DesktopThreadCreator {
 
     private static func makeWorktree(
         from workingDirectory: String,
-        threadID: UUID
+        worktreeRoot: URL,
+        makeIdentifier: @escaping @Sendable () -> String
     ) async throws -> String {
         try await Task.detached(priority: .userInitiated) {
             try createSynchronously(
                 from: workingDirectory,
-                threadID: threadID
+                worktreeRoot: worktreeRoot,
+                makeIdentifier: makeIdentifier
             )
         }.value
     }
 
     private static func createSynchronously(
         from workingDirectory: String,
-        threadID: UUID
+        worktreeRoot: URL,
+        makeIdentifier: () -> String
     ) throws -> String {
         let selectedDirectory = URL(fileURLWithPath: workingDirectory).standardizedFileURL
         let repositoryPath = try runGit([
@@ -62,12 +84,24 @@ enum DesktopThreadCreator {
         let relativePath = selectedDirectory.path
             .dropFirst(repository.path.count)
             .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        let identifier = String(threadID.uuidString.lowercased().prefix(8))
-        let slug = slug(for: repository.lastPathComponent)
-        let worktreeName = "\(repository.lastPathComponent)-\(slug)-\(identifier)"
-        let worktree = repository.deletingLastPathComponent().appending(path: worktreeName)
-        let branch = "fission/\(slug)-\(identifier)"
+        let repositoryWorktrees = worktreeRoot
+            .appending(path: repository.lastPathComponent, directoryHint: .isDirectory)
+        var branch = ""
+        var worktree = repositoryWorktrees
+        repeat {
+            branch = "fission-\(makeIdentifier())"
+            worktree = repositoryWorktrees
+                .appending(path: branch, directoryHint: .isDirectory)
+        } while try FileManager.default.fileExists(atPath: worktree.path)
+            || !(runGit([
+                "-C", repository.path,
+                "branch", "--list", branch
+            ])).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
 
+        try FileManager.default.createDirectory(
+            at: repositoryWorktrees,
+            withIntermediateDirectories: true
+        )
         _ = try runGit([
             "-C", repository.path,
             "worktree", "add", "-b", branch, worktree.path
@@ -77,14 +111,9 @@ enum DesktopThreadCreator {
         return worktree.appending(path: relativePath).path
     }
 
-    private static func slug(for title: String) -> String {
-        let normalized = title.folding(
-            options: [.diacriticInsensitive, .caseInsensitive],
-            locale: .current
-        )
-        let words = normalized.components(separatedBy: CharacterSet.alphanumerics.inverted)
-        let slug = words.filter { !$0.isEmpty }.joined(separator: "-")
-        return String((slug.isEmpty ? "thread" : slug).prefix(32))
+    private static func randomIdentifier() -> String {
+        let characters = Array("abcdefghijklmnopqrstuvwxyz0123456789")
+        return String((0..<6).compactMap { _ in characters.randomElement() })
     }
 
     private static func runGit(_ arguments: [String]) throws -> String {
