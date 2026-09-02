@@ -6,7 +6,6 @@ enum DesktopThreadCreator {
     @MainActor
     static func create(
         in model: ThreadListModel,
-        title: String,
         workingDirectory: String,
         createWorktree: Bool
     ) async -> UUID? {
@@ -16,13 +15,13 @@ enum DesktopThreadCreator {
             let resolvedWorkingDirectory = if createWorktree {
                 try await makeWorktree(
                     from: workingDirectory,
-                    threadTitle: title,
                     threadID: threadID
                 )
             } else {
                 workingDirectory
             }
 
+            let title = GitBranchResolver.currentBranch(at: resolvedWorkingDirectory) ?? "local"
             return await model.createThread(
                 id: threadID,
                 title: title,
@@ -36,13 +35,11 @@ enum DesktopThreadCreator {
 
     private static func makeWorktree(
         from workingDirectory: String,
-        threadTitle: String,
         threadID: UUID
     ) async throws -> String {
         try await Task.detached(priority: .userInitiated) {
             try createSynchronously(
                 from: workingDirectory,
-                threadTitle: threadTitle,
                 threadID: threadID
             )
         }.value
@@ -50,7 +47,6 @@ enum DesktopThreadCreator {
 
     private static func createSynchronously(
         from workingDirectory: String,
-        threadTitle: String,
         threadID: UUID
     ) throws -> String {
         let selectedDirectory = URL(fileURLWithPath: workingDirectory).standardizedFileURL
@@ -67,7 +63,7 @@ enum DesktopThreadCreator {
             .dropFirst(repository.path.count)
             .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
         let identifier = String(threadID.uuidString.lowercased().prefix(8))
-        let slug = slug(for: threadTitle)
+        let slug = slug(for: repository.lastPathComponent)
         let worktreeName = "\(repository.lastPathComponent)-\(slug)-\(identifier)"
         let worktree = repository.deletingLastPathComponent().appending(path: worktreeName)
         let branch = "fission/\(slug)-\(identifier)"

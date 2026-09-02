@@ -59,6 +59,19 @@ struct ThreadListModelTests {
         #expect(model.threads.count == count)
     }
 
+    @Test func renamesThreadsWithTrimmedNonemptyTitles() async throws {
+        let model = ThreadListModel(databasePath: ":memory:")
+        await model.load()
+        let threadID = try #require(await model.createThread(title: "Original"))
+
+        await model.rename(threadID: threadID, to: "  Renamed Thread  ")
+        #expect(model.threads.first { $0.id == threadID }?.title == "Renamed Thread")
+
+        await model.rename(threadID: threadID, to: " \n ")
+        #expect(model.threads.first { $0.id == threadID }?.title == "Renamed Thread")
+        #expect(model.errorMessage == nil)
+    }
+
     @Test func settlesReopensAndOrdersByLatestChange() async throws {
         let model = ThreadListModel(databasePath: ":memory:")
         await model.load()

@@ -1,14 +1,27 @@
+// swiftlint:disable file_length
+
 import FissionCore
 import SwiftUI
 
 struct ThreadListView: View {
     let model: ThreadListModel
-    @State private var workspaceStore = ThreadWorkspaceStore()
+    let agentActivityModel: AgentActivityModel
+    @State private var workspaceStore: ThreadWorkspaceStore
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var selectedThreadID: UUID?
+    @State private var editingThreadID: UUID?
+    @State private var renameDraft = ""
     @State private var isCreatingThread = false
     @State private var areSettledThreadsExpanded = true
     @State private var recentProjectPaths = RecentProjectPaths.load()
+
+    init(model: ThreadListModel, agentActivityModel: AgentActivityModel) {
+        self.model = model
+        self.agentActivityModel = agentActivityModel
+        _workspaceStore = State(
+            initialValue: ThreadWorkspaceStore(agentActivityModel: agentActivityModel)
+        )
+    }
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
@@ -18,6 +31,7 @@ struct ThreadListView: View {
             workspaceDetail
         }
         .focusedSceneValue(\.toggleSidebarAction, toggleSidebar)
+        .focusedSceneValue(\.renameThreadAction, renameThreadAction)
         .toolbar {
             ThreadToolbarContent(
                 thread: selectedThread,
@@ -34,12 +48,17 @@ struct ThreadListView: View {
             }) else {
                 return
             }
+            agentActivityModel.acknowledgeFinished(threadID: thread.id)
             workspaceStore.open(thread: thread)
+        }
+        .onChange(of: selectedThreadActivityState) { _, state in
+            guard state == .finished, let selectedThreadID else { return }
+            agentActivityModel.acknowledgeFinished(threadID: selectedThreadID)
         }
         .sheet(isPresented: $isCreatingThread) {
             NewThreadSheet(
                 recentPaths: recentProjectPaths,
-                create: createThread(in:name:createWorktree:),
+                create: createThread(in:createWorktree:),
                 cancel: { isCreatingThread = false }
             )
         }
@@ -69,15 +88,20 @@ struct ThreadListView: View {
             } else {
                 List(selection: $selectedThreadID) {
                     ForEach(activeThreads) { thread in
+                        let activityState = agentActivityModel.state(for: thread.id)
                         ThreadRow(
                             thread: thread,
+                            activityState: activityState,
                             isSelected: selectedThreadID == thread.id,
+                            isRenaming: editingThreadID == thread.id,
+                            renameTitle: $renameDraft,
+                            beginRenaming: { beginRenaming(thread) },
+                            commitRename: commitRename,
+                            cancelRename: cancelRename,
                             settle: { settle(thread) },
                             reopen: {}
                         )
-                        .listRowInsets(
-                            EdgeInsets(top: 3, leading: 8, bottom: 3, trailing: 8)
-                        )
+                        .listRowInsets(threadRowInsets())
                         .tag(thread.id)
                     }
                     .onDelete { offsets in
@@ -89,15 +113,20 @@ struct ThreadListView: View {
 
                         if areSettledThreadsExpanded {
                             ForEach(settledThreads) { thread in
+                                let activityState = agentActivityModel.state(for: thread.id)
                                 ThreadRow(
                                     thread: thread,
+                                    activityState: activityState,
                                     isSelected: false,
+                                    isRenaming: editingThreadID == thread.id,
+                                    renameTitle: $renameDraft,
+                                    beginRenaming: { beginRenaming(thread) },
+                                    commitRename: commitRename,
+                                    cancelRename: cancelRename,
                                     settle: {},
                                     reopen: { reopen(thread) }
                                 )
-                                .listRowInsets(
-                                    EdgeInsets(top: 3, leading: 8, bottom: 3, trailing: 8)
-                                )
+                                .listRowInsets(threadRowInsets())
                             }
                             .onDelete { offsets in
                                 deleteThreads(at: offsets, from: settledThreads)
@@ -140,6 +169,17 @@ struct ThreadListView: View {
     private var selectedThread: AgentThread? {
         model.threads.first { $0.id == selectedThreadID }
     }
+
+    private var renameThreadAction: (() -> Void)? {
+        guard selectedThread != nil else { return nil }
+        return beginRenamingSelectedThread
+    }
+
+    private var selectedThreadActivityState: AgentActivityState? {
+        guard let selectedThreadID else { return nil }
+        return agentActivityModel.state(for: selectedThreadID)
+    }
+
     private var activeThreads: [AgentThread] {
         model.threads.filter { !$0.isSettled }
     }
@@ -196,7 +236,6 @@ struct ThreadListView: View {
 
     private func createThread(
         in directory: URL,
-        name: String,
         createWorktree: Bool
     ) {
         RecentProjectPaths.record(directory)
@@ -206,7 +245,6 @@ struct ThreadListView: View {
         Task {
             if let threadID = await DesktopThreadCreator.create(
                 in: model,
-                title: name,
                 workingDirectory: directory.path,
                 createWorktree: createWorktree
             ) {
@@ -231,13 +269,54 @@ struct ThreadListView: View {
     }
 }
 
+private func threadRowInsets() -> EdgeInsets {
+    let verticalPadding: CGFloat = 18
+    return EdgeInsets(
+        top: verticalPadding,
+        leading: 8,
+        bottom: verticalPadding,
+        trailing: 8
+    )
+}
+
+private extension ThreadListView {
+    func beginRenamingSelectedThread() {
+        guard let selectedThread else { return }
+        beginRenaming(selectedThread)
+    }
+
+    func beginRenaming(_ thread: AgentThread) {
+        guard editingThreadID != thread.id else { return }
+        editingThreadID = thread.id
+        renameDraft = thread.title
+    }
+
+    func commitRename() {
+        guard let threadID = editingThreadID else { return }
+        let title = renameDraft
+        editingThreadID = nil
+        Task { await model.rename(threadID: threadID, to: title) }
+    }
+
+    func cancelRename() {
+        editingThreadID = nil
+    }
+}
+
 private struct ThreadRow: View {
     let thread: AgentThread
+    let activityState: AgentActivityState?
     let isSelected: Bool
+    let isRenaming: Bool
+    @Binding var renameTitle: String
+    let beginRenaming: () -> Void
+    let commitRename: () -> Void
+    let cancelRename: () -> Void
     let settle: () -> Void
     let reopen: () -> Void
 
     @State private var isHovering = false
+    @FocusState private var isRenameFieldFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -258,12 +337,36 @@ private struct ThreadRow: View {
             }
             .padding(.bottom, 3)
 
-            Text(thread.title)
-                .font(.system(size: 15, weight: .semibold))
-                .lineLimit(2)
-                .padding(.bottom, 6)
+            Group {
+                if isRenaming {
+                    TextField("Thread title", text: $renameTitle)
+                        .textFieldStyle(.plain)
+                        .focused($isRenameFieldFocused)
+                        .onSubmit(commitRename)
+                        .onExitCommand(perform: cancelRename)
+                        .onAppear {
+                            isRenameFieldFocused = true
+                        }
+                        .onChange(of: isRenameFieldFocused) { wasFocused, isFocused in
+                            if wasFocused && !isFocused {
+                                commitRename()
+                            }
+                        }
+                } else {
+                    Text(thread.title)
+                        .lineLimit(2)
+                }
+            }
+            .font(.system(size: 15, weight: .semibold))
+            .padding(.bottom, 6)
 
-            GitBranchLabel(workingDirectory: thread.workingDirectory)
+            HStack(spacing: 10) {
+                GitBranchLabel(workingDirectory: thread.workingDirectory)
+                Spacer(minLength: 0)
+                if let activityState {
+                    AgentActivityLabel(state: activityState)
+                }
+            }
         }
         .padding(.bottom, 6)
         .opacity(thread.isSettled ? 0.48 : 1)
@@ -272,9 +375,14 @@ private struct ThreadRow: View {
             RoundedRectangle(cornerRadius: 7)
                 .fill(isHovering && !isSelected ? Color.primary.opacity(0.06) : Color.clear)
                 .padding(.horizontal, -14)
+                .padding(.vertical, -12)
         }
         .onHover { isHovering = $0 }
         .contextMenu {
+            Button("Rename", systemImage: "pencil", action: beginRenaming)
+
+            Divider()
+
             if thread.isSettled {
                 Button("Reopen", systemImage: "arrow.uturn.backward", action: reopen)
             } else {
@@ -321,6 +429,55 @@ private struct ThreadRow: View {
     }
 }
 
+private struct AgentActivityLabel: View {
+    let state: AgentActivityState
+
+    var body: some View {
+        HStack(spacing: 4) {
+            if let title {
+                Text(title)
+            }
+            Image(systemName: symbol)
+        }
+        .font(.caption.weight(.medium))
+        .foregroundStyle(color)
+        .lineLimit(1)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Agent status: \(accessibilityTitle)")
+    }
+
+    private var title: String? {
+        switch state {
+        case .idle: "Idle"
+        case .running, .blocked: "Working"
+        case .finished: nil
+        }
+    }
+
+    private var accessibilityTitle: String {
+        switch state {
+        case .idle: "Idle"
+        case .running, .blocked: "Working"
+        case .finished: "Finished"
+        }
+    }
+
+    private var symbol: String {
+        switch state {
+        case .idle: "circle"
+        case .running, .blocked, .finished: "circle.fill"
+        }
+    }
+
+    private var color: Color {
+        switch state {
+        case .idle: .secondary
+        case .running, .blocked: .white
+        case .finished: .blue
+        }
+    }
+}
+
 private struct GitBranchLabel: View {
     let workingDirectory: String?
 
@@ -343,7 +500,7 @@ private struct GitBranchLabel: View {
     }
 }
 
-private enum GitBranchResolver {
+enum GitBranchResolver {
     static func currentBranch(at workingDirectory: String?) -> String? {
         guard let workingDirectory,
               let gitDirectory = findGitDirectory(from: URL(fileURLWithPath: workingDirectory)),
@@ -394,5 +551,8 @@ private enum GitBranchResolver {
 }
 
 #Preview {
-    ThreadListView(model: ThreadListModel(databasePath: ":memory:"))
+    ThreadListView(
+        model: ThreadListModel(databasePath: ":memory:"),
+        agentActivityModel: AgentActivityModel(installPiIntegration: false)
+    )
 }

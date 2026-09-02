@@ -16,6 +16,9 @@
 		A10000000000000000000008 /* HoverFeedback.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000008 /* HoverFeedback.swift */; };
 		A10000000000000000000009 /* ThreadHeaderTitle.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000009 /* ThreadHeaderTitle.swift */; };
 		A10000000000000000000010 /* DesktopThreadCreator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000010 /* DesktopThreadCreator.swift */; };
+		A10000000000000000000011 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000011 /* Assets.xcassets */; };
+		A10000000000000000000012 /* PiAgentIntegration.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000012 /* PiAgentIntegration.swift */; };
+		A10000000000000000000013 /* fission-pi-agent-state.ts in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000013 /* fission-pi-agent-state.ts */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -27,6 +30,9 @@
 		A20000000000000000000008 /* HoverFeedback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoverFeedback.swift; sourceTree = "<group>"; };
 		A20000000000000000000009 /* ThreadHeaderTitle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThreadHeaderTitle.swift; sourceTree = "<group>"; };
 		A20000000000000000000010 /* DesktopThreadCreator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesktopThreadCreator.swift; sourceTree = "<group>"; };
+		A20000000000000000000011 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		A20000000000000000000012 /* PiAgentIntegration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PiAgentIntegration.swift; sourceTree = "<group>"; };
+		A20000000000000000000013 /* fission-pi-agent-state.ts */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.typescript; path = "fission-pi-agent-state.ts"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -46,6 +52,7 @@
 			isa = PBXGroup;
 			children = (
 				A40000000000000000000002 /* Sources */,
+				A40000000000000000000007 /* Resources */,
 				A40000000000000000000005 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -84,8 +91,18 @@
 			isa = PBXGroup;
 			children = (
 				A20000000000000000000005 /* TerminalWorkspaceView.swift */,
+				A20000000000000000000012 /* PiAgentIntegration.swift */,
 			);
 			path = Terminal;
+			sourceTree = "<group>";
+		};
+		A40000000000000000000007 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				A20000000000000000000011 /* Assets.xcassets */,
+				A20000000000000000000013 /* fission-pi-agent-state.ts */,
+			);
+			path = Resources;
 			sourceTree = "<group>";
 		};
 		A40000000000000000000005 /* Products */ = {
@@ -162,6 +179,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A10000000000000000000011 /* Assets.xcassets in Resources */,
+				A10000000000000000000013 /* fission-pi-agent-state.ts in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -179,6 +198,7 @@
 				A10000000000000000000008 /* HoverFeedback.swift in Sources */,
 				A10000000000000000000009 /* ThreadHeaderTitle.swift in Sources */,
 				A10000000000000000000010 /* DesktopThreadCreator.swift in Sources */,
+				A10000000000000000000012 /* PiAgentIntegration.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -218,15 +238,17 @@
 		A80000000000000000000005 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Fission Dev";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.fission.desktop;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_BUNDLE_IDENTIFIER = com.fission.desktop.dev;
+				PRODUCT_NAME = FissionDev;
 				SDKROOT = macosx;
 				SUPPORTED_PLATFORMS = macosx;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -237,6 +259,7 @@
 		A80000000000000000000006 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -245,7 +268,7 @@
 				MACOSX_DEPLOYMENT_TARGET = 14.0;
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.fission.desktop;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = Fission;
 				SDKROOT = macosx;
 				SUPPORTED_PLATFORMS = macosx;
 				SWIFT_EMIT_LOC_STRINGS = YES;

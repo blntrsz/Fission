@@ -1,3 +1,5 @@
+// swiftlint:disable file_length
+
 import FissionCore
 import GhosttyTerminal
 import Observation
@@ -7,16 +9,29 @@ import SwiftUI
 @Observable
 final class ThreadWorkspaceStore {
     private(set) var workspaces: [TerminalTabsViewModel] = []
+    private let agentActivityModel: AgentActivityModel
+
+    init(agentActivityModel: AgentActivityModel) {
+        self.agentActivityModel = agentActivityModel
+    }
 
     func open(thread: AgentThread) {
         guard !workspaces.contains(where: { $0.threadID == thread.id }) else { return }
-        workspaces.append(TerminalTabsViewModel(thread: thread))
+        workspaces.append(
+            TerminalTabsViewModel(thread: thread, agentActivityModel: agentActivityModel)
+        )
     }
 
     func synchronize(threads: [AgentThread]) {
         let availableThreads = threads.filter { !$0.isSettled }
         let threadIDs = Set(availableThreads.map(\.id))
+        let removedThreadIDs = workspaces
+            .filter { !threadIDs.contains($0.threadID) }
+            .map(\.threadID)
         workspaces.removeAll { !threadIDs.contains($0.threadID) }
+        for threadID in removedThreadIDs {
+            agentActivityModel.forget(threadID: threadID)
+        }
 
         for workspace in workspaces {
             if let thread = availableThreads.first(where: { $0.id == workspace.threadID }) {
@@ -35,13 +50,15 @@ final class TerminalTabsViewModel: Identifiable {
     private(set) var workingDirectory: String?
     private(set) var tabs: [TerminalTab] = []
     var selectedTabID: UUID?
+    private let agentActivityModel: AgentActivityModel
     private var nextTabNumber = 1
 
-    init(thread: AgentThread) {
+    init(thread: AgentThread, agentActivityModel: AgentActivityModel) {
         id = thread.id
         threadID = thread.id
         threadTitle = thread.title
         workingDirectory = thread.workingDirectory
+        self.agentActivityModel = agentActivityModel
         addTab()
     }
 
@@ -51,7 +68,12 @@ final class TerminalTabsViewModel: Identifiable {
     }
 
     func addTab() {
-        let tab = TerminalTab(number: nextTabNumber, workingDirectory: workingDirectory)
+        let tab = TerminalTab(
+            number: nextTabNumber,
+            threadID: threadID,
+            workingDirectory: workingDirectory,
+            agentActivityModel: agentActivityModel
+        )
         nextTabNumber += 1
         tab.state.onClose = { [weak self, weak tab] _ in
             guard let tab else { return }
@@ -77,6 +99,7 @@ final class TerminalTabsViewModel: Identifiable {
         guard let index = tabs.firstIndex(where: { $0.id == tabID }) else { return }
         let wasSelected = selectedTabID == tabID
         tabs.remove(at: index)
+        agentActivityModel.forget(threadID: threadID, tabID: tabID)
 
         if tabs.isEmpty {
             addTab()
@@ -103,11 +126,18 @@ final class TerminalTabsViewModel: Identifiable {
 @MainActor
 @Observable
 final class TerminalTab: Identifiable {
-    nonisolated let id = UUID()
+    nonisolated let id: UUID
     private(set) var title: String
     let state: TerminalViewState
 
-    init(number: Int, workingDirectory: String?) {
+    init(
+        number: Int,
+        threadID: UUID,
+        workingDirectory: String?,
+        agentActivityModel: AgentActivityModel
+    ) {
+        let id = UUID()
+        self.id = id
         title = "Tab \(number)"
         state = TerminalViewState(
             configSource: GhosttyUserConfiguration.source,
@@ -118,6 +148,7 @@ final class TerminalTab: Identifiable {
         state.configuration = TerminalSurfaceOptions(
             backend: .exec,
             workingDirectory: workingDirectory,
+            envVars: agentActivityModel.environment(threadID: threadID, tabID: id),
             context: .window,
             resizeThrottleMilliseconds: 16
         )
@@ -137,8 +168,7 @@ private enum GhosttyUserConfiguration {
 
         let xdgDirectory: URL
         if let configuredDirectory = ProcessInfo.processInfo.environment["XDG_CONFIG_HOME"],
-           configuredDirectory.hasPrefix("/")
-        {
+           configuredDirectory.hasPrefix("/") {
             xdgDirectory = URL(fileURLWithPath: configuredDirectory, isDirectory: true)
         } else {
             xdgDirectory = homeDirectory.appendingPathComponent(".config", isDirectory: true)
@@ -155,7 +185,7 @@ private enum GhosttyUserConfiguration {
             xdgGhosttyDirectory.appendingPathComponent("config"),
             xdgGhosttyDirectory.appendingPathComponent("config.ghostty"),
             appSupportDirectory.appendingPathComponent("config"),
-            appSupportDirectory.appendingPathComponent("config.ghostty"),
+            appSupportDirectory.appendingPathComponent("config.ghostty")
         ]
         let existingPaths = candidates
             .map(\.path)
@@ -206,7 +236,7 @@ private enum GhosttyUserConfiguration {
                 let mode = entry[..<colonIndex].trimmingCharacters(in: .whitespaces)
                 let nameStart = entry.index(after: colonIndex)
                 let name = entry[nameStart...].trimmingCharacters(in: .whitespaces)
-                guard (mode == "light" || mode == "dark"),
+                guard mode == "light" || mode == "dark",
                       let path = installedThemePath(named: name)
                 else {
                     return nil
@@ -273,8 +303,7 @@ struct TerminalWorkspaceView: View {
                 model.select(tabID: selectedTabID)
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .terminalTabsShortcut)) {
-            notification in
+        .onReceive(NotificationCenter.default.publisher(for: .terminalTabsShortcut)) { notification in
             guard isVisible,
                   let request = notification.object as? TerminalTabsShortcutRequest
             else {

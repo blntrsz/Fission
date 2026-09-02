@@ -25,6 +25,7 @@ struct FissionDesktopApp: App {
     @State private var threadListModel = ThreadListModel(
         databasePath: ThreadListModel.applicationSupportDatabasePath
     )
+    @State private var agentActivityModel = AgentActivityModel()
 
     private static let terminalTabsShortcutMonitor = NSEvent.addLocalMonitorForEvents(
         matching: .keyDown
@@ -34,7 +35,7 @@ struct FissionDesktopApp: App {
 
         if modifiers == .command, let index = terminalTabIndex(for: event.keyCode) {
             action = .selectTab(index)
-        } else if modifiers == [.command, .shift], event.keyCode == 45 {
+        } else if modifiers == .command, event.keyCode == 17 {
             action = .addTab
         } else {
             action = nil
@@ -68,8 +69,11 @@ struct FissionDesktopApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ThreadListView(model: threadListModel)
-                .frame(minWidth: 900, minHeight: 560)
+            ThreadListView(
+                model: threadListModel,
+                agentActivityModel: agentActivityModel
+            )
+            .frame(minWidth: 900, minHeight: 560)
         }
         .commands {
             AppKeyboardCommands()
@@ -78,6 +82,10 @@ struct FissionDesktopApp: App {
 }
 
 private struct ToggleSidebarActionKey: FocusedValueKey {
+    typealias Value = () -> Void
+}
+
+private struct RenameThreadActionKey: FocusedValueKey {
     typealias Value = () -> Void
 }
 
@@ -97,6 +105,11 @@ extension FocusedValues {
         set { self[ToggleSidebarActionKey.self] = newValue }
     }
 
+    var renameThreadAction: (() -> Void)? {
+        get { self[RenameThreadActionKey.self] }
+        set { self[RenameThreadActionKey.self] = newValue }
+    }
+
     var terminalTabsActions: TerminalTabsActions? {
         get { self[TerminalTabsActionsKey.self] }
         set { self[TerminalTabsActionsKey.self] = newValue }
@@ -105,14 +118,23 @@ extension FocusedValues {
 
 private struct AppKeyboardCommands: Commands {
     @FocusedValue(\.toggleSidebarAction) private var toggleSidebar
+    @FocusedValue(\.renameThreadAction) private var renameThread
     @FocusedValue(\.terminalTabsActions) private var terminalTabs
 
     var body: some Commands {
         CommandGroup(after: .newItem) {
+            Button("Rename Thread") {
+                renameThread?()
+            }
+            .keyboardShortcut("r", modifiers: [.command, .shift])
+            .disabled(renameThread == nil)
+
+            Divider()
+
             Button("New Terminal Tab") {
                 terminalTabs?.addTab()
             }
-            .keyboardShortcut("n", modifiers: [.command, .shift])
+            .keyboardShortcut("t", modifiers: .command)
             .disabled(terminalTabs == nil)
 
             ForEach(1...9, id: \.self) { tabNumber in

@@ -77,6 +77,26 @@ public final class ThreadListModel {
         }
     }
 
+    public func rename(threadID: UUID, to title: String) async {
+        guard let repository,
+              didLoad,
+              var thread = threads.first(where: { $0.id == threadID }) else {
+            return
+        }
+
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedTitle.isEmpty, trimmedTitle != thread.title else { return }
+
+        thread.rename(to: trimmedTitle)
+
+        do {
+            try await repository.update(thread)
+            try await refresh(using: repository)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     public func settle(threadID: UUID) async {
         await transition(threadID: threadID, to: .settled)
     }

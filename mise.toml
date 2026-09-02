@@ -18,7 +18,20 @@ run = '''
 #!/usr/bin/env bash
 set -euo pipefail
 
-exec watchexec \
+LOCK_DIR="${TMPDIR:-/tmp}/fission-desktop-watcher-${UID}.lock"
+if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+  EXISTING_PID="$(cat "$LOCK_DIR/pid" 2>/dev/null || true)"
+  if [[ "$EXISTING_PID" =~ ^[0-9]+$ ]] && kill -0 "$EXISTING_PID" 2>/dev/null; then
+    echo "The Fission desktop watcher is already running (PID $EXISTING_PID)." >&2
+    exit 1
+  fi
+  rm -rf "$LOCK_DIR"
+  mkdir "$LOCK_DIR"
+fi
+printf '%s\n' "$$" > "$LOCK_DIR/pid"
+trap 'rm -rf "$LOCK_DIR"' EXIT INT TERM
+
+watchexec \
   --restart \
   --project-origin . \
   --watch Apps/Desktop/Sources \
@@ -35,7 +48,8 @@ run = '''
 set -euo pipefail
 
 DERIVED_DATA="Apps/Desktop/.derivedData"
-APP_PATH="$DERIVED_DATA/Build/Products/Debug/FissionDesktop.app"
+PRODUCT_NAME="FissionDev"
+APP_PATH="$DERIVED_DATA/Build/Products/Debug/$PRODUCT_NAME.app"
 
 xcodebuild \
   -project Apps/Desktop/FissionDesktop.xcodeproj \
@@ -45,19 +59,25 @@ xcodebuild \
   -derivedDataPath "$DERIVED_DATA" \
   build
 
-# Ensure `open` starts the newly built binary rather than activating an older one.
+# Ensure `open` starts the newly built dev binary rather than activating an older
+# dev build. The packaged Fission process is deliberately left running.
 # LaunchServices can return -600 if asked to reopen the app while its previous
 # process is still terminating.
-pkill -x FissionDesktop 2>/dev/null || true
+pkill -x "$PRODUCT_NAME" 2>/dev/null || true
 for _ in $(seq 1 100); do
-  pgrep -x FissionDesktop >/dev/null || break
+  pgrep -x "$PRODUCT_NAME" >/dev/null || break
   sleep 0.05
 done
-if pgrep -x FissionDesktop >/dev/null; then
-  echo "FissionDesktop did not terminate within 5 seconds" >&2
+if pgrep -x "$PRODUCT_NAME" >/dev/null; then
+  echo "$PRODUCT_NAME did not terminate within 5 seconds" >&2
   exit 1
 fi
-open -n "$APP_PATH"
+if ! open -n "$APP_PATH"; then
+  # LaunchServices can briefly retain the terminated app's launchd job even
+  # after the process disappears. Give it time to clear, then retry once.
+  sleep 0.25
+  open -n "$APP_PATH"
+fi
 '''
 
 [tasks."desktop:package"]
@@ -67,7 +87,7 @@ run = '''
 set -euo pipefail
 
 DERIVED_DATA="Apps/Desktop/.derivedData"
-APP_PATH="$DERIVED_DATA/Build/Products/Release/FissionDesktop.app"
+APP_PATH="$DERIVED_DATA/Build/Products/Release/Fission.app"
 DIST_DIR="dist"
 DMG_ROOT="$DIST_DIR/.dmg-root"
 DMG_PATH="$DIST_DIR/Fission.dmg"
@@ -84,7 +104,7 @@ rm -rf "$DMG_ROOT"
 mkdir -p "$DMG_ROOT"
 trap 'rm -rf "$DMG_ROOT"' EXIT
 
-ditto "$APP_PATH" "$DMG_ROOT/FissionDesktop.app"
+ditto "$APP_PATH" "$DMG_ROOT/Fission.app"
 ln -s /Applications "$DMG_ROOT/Applications"
 
 mkdir -p "$DIST_DIR"

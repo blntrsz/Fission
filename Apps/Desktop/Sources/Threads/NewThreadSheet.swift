@@ -2,10 +2,9 @@ import SwiftUI
 
 struct NewThreadSheet: View {
     let recentPaths: [String]
-    let create: (URL, String, Bool) -> Void
+    let create: (URL, Bool) -> Void
     let cancel: () -> Void
 
-    @State private var threadName = ""
     @State private var query = ""
     @State private var selectedIndex = 0
     @AppStorage("createThreadsInNewWorktree") private var createInNewWorktree = false
@@ -66,31 +65,12 @@ struct NewThreadSheet: View {
             }
 
             field(
-                title: "Thread name",
-                systemImage: "text.cursor",
-                placeholder: "What should the agent work on?",
-                text: $threadName,
-                focus: .name
-            )
-
-            field(
                 title: "Project folder",
                 systemImage: "magnifyingglass",
                 placeholder: "Search projects or enter ./, ~/, or /",
                 text: $query,
                 focus: .project
             )
-
-            Toggle(isOn: $createInNewWorktree) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Create in a new worktree")
-                        .font(.body.weight(.medium))
-                    Text("Create an isolated Git branch and use its checkout for this Thread.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .toggleStyle(.switch)
         }
         .padding(24)
     }
@@ -208,7 +188,7 @@ struct NewThreadSheet: View {
             TapGesture(count: 2).onEnded {
                 selectedIndex = index
                 query = inputPath(for: project.url)
-                focusedField = .name
+                focusedField = .project
             }
         )
     }
@@ -222,14 +202,15 @@ struct NewThreadSheet: View {
 
             Spacer()
 
-            Button("Cancel", action: cancel)
-                .keyboardShortcut(.cancelAction)
+            Toggle("New worktree", isOn: $createInNewWorktree)
+                .toggleStyle(.switch)
+                .help("Create an isolated Git branch and use its checkout for this Thread.")
 
             Button("Create Thread") {
                 createSelectedProject()
             }
             .keyboardShortcut(.defaultAction)
-            .disabled(projects.isEmpty || trimmedThreadName.isEmpty)
+            .disabled(projects.isEmpty)
         }
         .font(.callout)
         .foregroundStyle(.secondary)
@@ -276,18 +257,13 @@ struct NewThreadSheet: View {
         return path.hasSuffix("/") ? path : path + "/"
     }
 
-    private var trimmedThreadName: String {
-        threadName.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
     private func createSelectedProject() {
-        guard projects.indices.contains(selectedIndex), !trimmedThreadName.isEmpty else { return }
-        create(projects[selectedIndex].url, trimmedThreadName, createInNewWorktree)
+        guard projects.indices.contains(selectedIndex) else { return }
+        create(projects[selectedIndex].url, createInNewWorktree)
     }
 }
 
 private enum Field: Hashable {
-    case name
     case project
 }
 

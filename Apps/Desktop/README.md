@@ -14,6 +14,14 @@ The task watches the desktop and Core Swift sources. When they change, it rebuil
 
 You can also open `FissionDesktop.xcodeproj`, select **My Mac**, and press Run. The app persists Threads in SQLite through the local `FissionCore` package.
 
+### Pi activity integration
+
+On launch, Fission installs its bundled Pi extension at
+`~/.pi/agent/extensions/fission-agent-state.ts` (or under `PI_CODING_AGENT_DIR` when set).
+The extension is inactive outside Fission terminals. Inside Fission it reports Pi's idle, running,
+blocked, and finished states to the sidebar over a token-authenticated loopback socket. Restart Pi
+after first launching Fission so the newly installed extension is loaded.
+
 To build it directly with Xcode:
 
 ```bash
@@ -28,7 +36,7 @@ xcodebuild \
 Launch the built app from Xcode or with:
 
 ```bash
-open Apps/Desktop/.derivedData/Build/Products/Debug/FissionDesktop.app
+open Apps/Desktop/.derivedData/Build/Products/Debug/FissionDev.app
 ```
 
 ## Package
