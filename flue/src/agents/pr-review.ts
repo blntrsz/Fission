@@ -10,7 +10,7 @@ import { local } from '@flue/runtime/node';
 import * as v from 'valibot';
 
 export function PullRequestReviewer() {
-  useModel('opencode-go/glm-5.3-flash', { thinkingLevel: 'high' });
+  useModel('opencode-go/deepseek-v4-pro', { thinkingLevel: 'high' });
   useSubagent(GeneralSubagent);
   useSandbox(
     local({
