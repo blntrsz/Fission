@@ -17,39 +17,29 @@ jobs:
     if: ${{ !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GITHUB_TOKEN: ${{ github.token }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
 
     steps:
-      - name: Show review in progress
-        uses: actions/github-script@v7
-        env:
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        with:
-          script: |
-            const marker = '<!-- flue-pr-review -->';
-            const body = `${marker}\n## Flue code review\n\n⏳ Reviewing commit \`${process.env.HEAD_SHA.slice(0, 7)}\`…`;
-            const { owner, repo } = context.repo;
-            const issue_number = context.issue.number;
-            const comments = await github.paginate(github.rest.issues.listComments, {
-              owner,
-              repo,
-              issue_number,
-              per_page: 100,
-            });
-            const existing = comments.find(
-              (comment) => comment.user?.login === 'github-actions[bot]' && comment.body?.includes(marker),
-            );
-            if (existing) {
-              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
-            } else {
-              await github.rest.issues.createComment({ owner, repo, issue_number, body });
-            }
-
       - name: Check out pull request
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha }}
           submodules: recursive
+
+      - name: Show review in progress
+        run: |
+          cat > "$RUNNER_TEMP/flue-comment.md" <<EOF
+          <!-- flue-review-sha:${HEAD_SHA} -->
+          ## Flue code review
+
+          ⏳ Reviewing commit \`${HEAD_SHA:0:7}\`…
+          EOF
+          node .github/scripts/upsert-flue-review-comment.mjs "$RUNNER_TEMP/flue-comment.md"
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -62,66 +52,40 @@ jobs:
         run: npm ci --prefix flue
 
       - name: Run code review
+        id: review
         working-directory: flue
         env:
-          GH_TOKEN: ${{ github.token }}
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: |
           npx flue run src/agents/pr-review.ts \
             --message "Review PR #${PR_NUMBER} with fixed point ${BASE_SHA}." \
-            > review.md
+            --json > response.json
+          jq -er '.message | strings | select(length > 0)' response.json > review.md
 
-      - name: Publish review
-        uses: actions/github-script@v7
+      - name: Publish terminal review state
+        if: ${{ always() }}
         env:
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        with:
-          script: |
-            const fs = require('fs');
-            const marker = '<!-- flue-pr-review -->';
-            const report = fs.readFileSync('flue/review.md', 'utf8').trim();
-            const body = `${marker}\n## Flue code review\n\n✅ Reviewed commit \`${process.env.HEAD_SHA.slice(0, 7)}\`.\n\n${report}`;
-            const { owner, repo } = context.repo;
-            const issue_number = context.issue.number;
-            const comments = await github.paginate(github.rest.issues.listComments, {
-              owner,
-              repo,
-              issue_number,
-              per_page: 100,
-            });
-            const existing = comments.find(
-              (comment) => comment.user?.login === 'github-actions[bot]' && comment.body?.includes(marker),
-            );
-            if (existing) {
-              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
-            } else {
-              await github.rest.issues.createComment({ owner, repo, issue_number, body });
-            }
-
-      - name: Publish failure state
-        if: ${{ failure() }}
-        uses: actions/github-script@v7
-        env:
+          EXPECTED_BODY_TOKEN: ${{ github.event.pull_request.head.sha }}
+          REVIEW_OUTCOME: ${{ steps.review.outcome }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        with:
-          script: |
-            const marker = '<!-- flue-pr-review -->';
-            const body = `${marker}\n## Flue code review\n\n❌ Review failed. [Open the workflow run](${process.env.RUN_URL}) for details.`;
-            const { owner, repo } = context.repo;
-            const issue_number = context.issue.number;
-            const comments = await github.paginate(github.rest.issues.listComments, {
-              owner,
-              repo,
-              issue_number,
-              per_page: 100,
-            });
-            const existing = comments.find(
-              (comment) => comment.user?.login === 'github-actions[bot]' && comment.body?.includes(marker),
-            );
-            if (existing) {
-              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
-            } else {
-              await github.rest.issues.createComment({ owner, repo, issue_number, body });
-            }
+        run: |
+          if [[ "$REVIEW_OUTCOME" == "success" ]]; then
+            {
+              printf '<!-- flue-review-sha:%s -->\n## Flue code review\n\n✅ Reviewed commit `%s`.\n\n' \
+                "$HEAD_SHA" "${HEAD_SHA:0:7}"
+              sed \
+                -e '/<!-- flue-pr-review -->/d' \
+                -e '/^## Flue code review$/d' \
+                -e '/^✅ Reviewed commit `.*`\.$/d' \
+                -e '/^⏳ Reviewing commit /d' \
+                flue/review.md
+            } > "$RUNNER_TEMP/flue-comment.md"
+          elif [[ "$REVIEW_OUTCOME" == "cancelled" ]]; then
+            printf '<!-- flue-review-sha:%s -->\n## Flue code review\n\n⏭️ Review of commit `%s` was superseded by a newer run.\n' \
+              "$HEAD_SHA" "${HEAD_SHA:0:7}" > "$RUNNER_TEMP/flue-comment.md"
+          else
+            printf '<!-- flue-review-sha:%s -->\n## Flue code review\n\n❌ Review failed. [Open the workflow run](%s) for details.\n' \
+              "$HEAD_SHA" "$RUN_URL" > "$RUNNER_TEMP/flue-comment.md"
+          fi
+          node .github/scripts/upsert-flue-review-comment.mjs "$RUNNER_TEMP/flue-comment.md"

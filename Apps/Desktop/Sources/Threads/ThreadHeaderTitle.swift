@@ -11,22 +11,25 @@ struct ThreadToolbarContent: ToolbarContent {
                 .keyboardShortcut("n")
         }
 
+        // Xcode 26 couples Swift 6.2+ with the macOS 26 SDK; older SDKs
+        // cannot parse sharedBackgroundVisibility, even behind #available.
         #if compiler(>=6.2)
         if #available(macOS 26.0, *) {
-            ToolbarItem(placement: .navigation) {
-                title
-            }
-            .sharedBackgroundVisibility(.hidden)
+            titleItem
+                .sharedBackgroundVisibility(.hidden)
         } else {
-            ToolbarItem(placement: .navigation) {
-                title
-            }
+            titleItem
         }
         #else
+        titleItem
+        #endif
+    }
+
+    @ToolbarContentBuilder
+    private var titleItem: some ToolbarContent {
         ToolbarItem(placement: .navigation) {
             title
         }
-        #endif
     }
 
     @ViewBuilder
