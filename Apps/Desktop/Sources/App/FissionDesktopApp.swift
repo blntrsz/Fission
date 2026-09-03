@@ -117,6 +117,7 @@ struct TerminalTabsActions {
     let tabCount: Int
     let addTab: () -> Void
     let selectTab: (Int) -> Void
+    let pasteImage: () -> Bool
 }
 
 private struct TerminalTabsActionsKey: FocusedValueKey {
@@ -146,6 +147,41 @@ private struct AppKeyboardCommands: Commands {
     @FocusedValue(\.terminalTabsActions) private var terminalTabs
 
     var body: some Commands {
+        CommandGroup(replacing: .pasteboard) {
+            Button("Cut") {
+                sendAction(#selector(NSText.cut(_:)))
+            }
+            .keyboardShortcut("x", modifiers: .command)
+
+            Button("Copy") {
+                sendAction(#selector(NSText.copy(_:)))
+            }
+            .keyboardShortcut("c", modifiers: .command)
+
+            Button("Paste") {
+                if terminalTabs?.pasteImage() != true {
+                    sendAction(#selector(NSText.paste(_:)))
+                }
+            }
+            .keyboardShortcut("v", modifiers: .command)
+
+            Button("Paste and Match Style") {
+                sendAction(#selector(NSTextView.pasteAsPlainText(_:)))
+            }
+            .keyboardShortcut("v", modifiers: [.command, .option, .shift])
+
+            Button("Delete") {
+                sendAction(#selector(NSText.delete(_:)))
+            }
+
+            Divider()
+
+            Button("Select All") {
+                sendAction(#selector(NSText.selectAll(_:)))
+            }
+            .keyboardShortcut("a", modifiers: .command)
+        }
+
         CommandGroup(after: .newItem) {
             Button("Rename Thread") {
                 renameThread?()
@@ -186,5 +222,9 @@ private struct AppKeyboardCommands: Commands {
             .keyboardShortcut("s", modifiers: .command)
             .disabled(toggleSidebar == nil)
         }
+    }
+
+    private func sendAction(_ action: Selector) {
+        NSApp.sendAction(action, to: nil, from: nil)
     }
 }

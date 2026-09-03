@@ -95,6 +95,15 @@ final class TerminalTabsViewModel: Identifiable {
         select(tabID: tabs[index].id)
     }
 
+    func pasteImageIntoFocusedTab() -> Bool {
+        guard let tab = tabs.first(where: { $0.id == selectedTabID }),
+              let view = tab.state.attachedPlatformView as? FissionTerminalView
+        else {
+            return false
+        }
+        return view.pasteImageFromMenu()
+    }
+
     func close(tabID: UUID) {
         guard let index = tabs.firstIndex(where: { $0.id == tabID }) else { return }
         let wasSelected = selectedTabID == tabID
@@ -145,6 +154,7 @@ final class TerminalTab: Identifiable {
             // package's default Alabaster/Afterglow theme.
             theme: TerminalTheme()
         )
+        state.makePlatformView = { FissionTerminalView(frame: .zero) }
         state.configuration = TerminalSurfaceOptions(
             backend: .exec,
             workingDirectory: workingDirectory,
@@ -292,7 +302,8 @@ struct TerminalWorkspaceView: View {
                 ? TerminalTabsActions(
                     tabCount: model.tabs.count,
                     addTab: { model.addTab() },
-                    selectTab: { model.selectTab(at: $0) }
+                    selectTab: { model.selectTab(at: $0) },
+                    pasteImage: { model.pasteImageIntoFocusedTab() }
                 )
                 : nil
         )
