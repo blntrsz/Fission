@@ -11,6 +11,7 @@ struct ThreadToolbarContent: ToolbarContent {
                 .keyboardShortcut("n")
         }
 
+        #if compiler(>=6.2)
         if #available(macOS 26.0, *) {
             ToolbarItem(placement: .navigation) {
                 title
@@ -21,6 +22,11 @@ struct ThreadToolbarContent: ToolbarContent {
                 title
             }
         }
+        #else
+        ToolbarItem(placement: .navigation) {
+            title
+        }
+        #endif
     }
 
     @ViewBuilder
