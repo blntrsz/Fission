@@ -49,4 +49,6 @@ mise run desktop:package
 
 The resulting disk image is written to `dist/Fission.dmg`.
 
-The default build uses an ad-hoc signature, which is suitable for local installation. Distribution to other users without Gatekeeper warnings requires signing with a Developer ID Application certificate and notarizing the disk image through Apple.
+Every push to `main` also runs `.github/workflows/release-desktop.yml`. It creates a `desktop-<run number>` GitHub release containing the DMG and its SHA-256 checksum. A failed workflow can be rerun safely without creating a duplicate release.
+
+The default and automated builds use an ad-hoc signature, which is suitable for local installation. Distribution to other users without Gatekeeper warnings requires signing with a Developer ID Application certificate and notarizing the disk image through Apple.

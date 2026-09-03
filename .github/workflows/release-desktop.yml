@@ -1,0 +1,64 @@
+name: Release desktop app
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-desktop-main
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: macos-15
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Build DMG
+        env:
+          FISSION_BUILD_NUMBER: ${{ github.run_number }}
+        run: ./scripts/package-desktop.sh
+
+      - name: Verify release artifact
+        run: |
+          hdiutil verify dist/Fission.dmg
+          shasum -a 256 dist/Fission.dmg > dist/Fission.dmg.sha256
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: desktop-${{ github.run_number }}
+        run: |
+          title="Fission Desktop build ${{ github.run_number }}"
+          notes="Automated desktop build of commit ${GITHUB_SHA}."
+
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release edit "$RELEASE_TAG" \
+              --target "$GITHUB_SHA" \
+              --title "$title" \
+              --notes "$notes" \
+              --latest
+            gh release upload "$RELEASE_TAG" \
+              dist/Fission.dmg \
+              dist/Fission.dmg.sha256 \
+              --clobber
+          else
+            gh release create "$RELEASE_TAG" \
+              dist/Fission.dmg \
+              dist/Fission.dmg.sha256 \
+              --target "$GITHUB_SHA" \
+              --title "$title" \
+              --notes "$notes" \
+              --latest
+          fi
