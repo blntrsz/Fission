@@ -97,6 +97,7 @@ struct NewThreadSheet: View {
                     .foregroundStyle(.secondary)
 
                 TextField(placeholder, text: text)
+                    .accessibilityIdentifier("project-path-field")
                     .textFieldStyle(.plain)
                     .font(.title3)
                     .focused($focusedField, equals: focus)
@@ -214,6 +215,7 @@ struct NewThreadSheet: View {
             Button("Create Thread") {
                 createSelectedProject()
             }
+            .accessibilityIdentifier("create-thread-button")
             .keyboardShortcut(.defaultAction)
             .disabled(projects.isEmpty)
         }

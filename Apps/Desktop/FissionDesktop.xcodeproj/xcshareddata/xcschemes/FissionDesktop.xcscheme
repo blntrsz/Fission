@@ -35,6 +35,20 @@
                ReferencedContainer = "container:FissionDesktop.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "NO"
+            buildForProfiling = "NO"
+            buildForArchiving = "NO"
+            buildForAnalyzing = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "C50000000000000000000001"
+               BuildableName = "FissionDesktopUITests.xctest"
+               BlueprintName = "FissionDesktopUITests"
+               ReferencedContainer = "container:FissionDesktop.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
    <TestAction
@@ -49,6 +63,15 @@
                BlueprintIdentifier = "B50000000000000000000001"
                BuildableName = "FissionDesktopTests.xctest"
                BlueprintName = "FissionDesktopTests"
+               ReferencedContainer = "container:FissionDesktop.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference skipped = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "C50000000000000000000001"
+               BuildableName = "FissionDesktopUITests.xctest"
+               BlueprintName = "FissionDesktopUITests"
                ReferencedContainer = "container:FissionDesktop.xcodeproj">
             </BuildableReference>
          </TestableReference>

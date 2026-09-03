@@ -39,6 +39,18 @@ Launch the built app from Xcode or with:
 open Apps/Desktop/.derivedData/Build/Products/Debug/FissionDev.app
 ```
 
+## UI verification
+
+Run the serial macOS UI test suite with isolated per-test application data:
+
+```bash
+.agents/skills/verify-fission/scripts/run-desktop-ui-tests.sh
+```
+
+The harness writes screenshots and diagnostics to
+`/tmp/fission-verification-$UID/FissionDesktopUITests.xcresult`. macOS may require a one-time
+Accessibility grant for the Xcode/XCTest helper; Terminal itself does not need the grant.
+
 ## Package
 
 Build an optimized universal macOS app and package it as a drag-to-Applications DMG:

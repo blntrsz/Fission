@@ -296,6 +296,7 @@ struct TerminalWorkspaceView: View {
             terminalStack
         }
         .background(Color(nsColor: .windowBackgroundColor))
+        .accessibilityIdentifier("terminal-workspace")
         .focusedSceneValue(
             \.terminalTabsActions,
             isVisible

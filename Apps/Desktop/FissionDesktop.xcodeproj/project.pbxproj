@@ -30,10 +30,18 @@
 		B10000000000000000000005 /* TerminalURLHandlerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000005 /* TerminalURLHandlerTests.swift */; };
 		B10000000000000000000002 /* FissionCore in Frameworks */ = {isa = PBXBuildFile; productRef = A90000000000000000000001 /* FissionCore */; };
 		B10000000000000000000006 /* TerminalInputContentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000006 /* TerminalInputContentTests.swift */; };
+		C10000000000000000000001 /* FissionDesktopUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000001 /* FissionDesktopUITests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
 		B00000000000000000000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A70000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A50000000000000000000001;
+			remoteInfo = FissionDesktop;
+		};
+		C00000000000000000000001 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = A70000000000000000000001 /* Project object */;
 			proxyType = 1;
@@ -65,6 +73,8 @@
 		B20000000000000000000003 /* AgentActivityModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentActivityModelTests.swift; sourceTree = "<group>"; };
 		B20000000000000000000004 /* DesktopNavigationModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesktopNavigationModelTests.swift; sourceTree = "<group>"; };
 		B20000000000000000000006 /* TerminalInputContentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalInputContentTests.swift; sourceTree = "<group>"; };
+		C20000000000000000000001 /* FissionDesktopUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FissionDesktopUITests.swift; sourceTree = "<group>"; };
+		C20000000000000000000002 /* FissionDesktopUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FissionDesktopUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -85,6 +95,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		C30000000000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -94,6 +111,7 @@
 				A40000000000000000000002 /* Sources */,
 				A40000000000000000000007 /* Resources */,
 				B40000000000000000000001 /* Tests */,
+				C40000000000000000000001 /* UITests */,
 				A40000000000000000000005 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -156,6 +174,7 @@
 			children = (
 				A20000000000000000000004 /* FissionDesktop.app */,
 				B20000000000000000000002 /* FissionDesktopTests.xctest */,
+				C20000000000000000000002 /* FissionDesktopUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -170,6 +189,14 @@
 				B20000000000000000000006 /* TerminalInputContentTests.swift */,
 			);
 			path = Tests;
+			sourceTree = "<group>";
+		};
+		C40000000000000000000001 /* UITests */ = {
+			isa = PBXGroup;
+			children = (
+				C20000000000000000000001 /* FissionDesktopUITests.swift */,
+			);
+			path = UITests;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -216,6 +243,25 @@
 			productReference = B20000000000000000000002 /* FissionDesktopTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
+		C50000000000000000000001 /* FissionDesktopUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C80000000000000000000001 /* Build configuration list for PBXNativeTarget "FissionDesktopUITests" */;
+			buildPhases = (
+				C60000000000000000000001 /* Sources */,
+				C30000000000000000000001 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				C90000000000000000000001 /* PBXTargetDependency */,
+			);
+			name = FissionDesktopUITests;
+			packageProductDependencies = (
+			);
+			productName = FissionDesktopUITests;
+			productReference = C20000000000000000000002 /* FissionDesktopUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -230,6 +276,10 @@
 						CreatedOnToolsVersion = 26.0;
 					};
 					B50000000000000000000001 = {
+						CreatedOnToolsVersion = 26.0;
+						TestTargetID = A50000000000000000000001;
+					};
+					C50000000000000000000001 = {
 						CreatedOnToolsVersion = 26.0;
 						TestTargetID = A50000000000000000000001;
 					};
@@ -254,6 +304,7 @@
 			targets = (
 				A50000000000000000000001 /* FissionDesktop */,
 				B50000000000000000000001 /* FissionDesktopTests */,
+				C50000000000000000000001 /* FissionDesktopUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -300,6 +351,14 @@
 				B10000000000000000000004 /* DesktopNavigationModelTests.swift in Sources */,
 				B10000000000000000000005 /* TerminalURLHandlerTests.swift in Sources */,
 				B10000000000000000000006 /* TerminalInputContentTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C60000000000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				C10000000000000000000001 /* FissionDesktopUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -411,6 +470,36 @@
 			};
 			name = Release;
 		};
+		C80000000000000000000002 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.fission.desktop.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SUPPORTED_PLATFORMS = macosx;
+				SWIFT_VERSION = 6.0;
+				TEST_TARGET_NAME = FissionDesktop;
+			};
+			name = Debug;
+		};
+		C80000000000000000000003 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				GENERATE_INFOPLIST_FILE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.fission.desktop.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SUPPORTED_PLATFORMS = macosx;
+				SWIFT_VERSION = 6.0;
+				TEST_TARGET_NAME = FissionDesktop;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -441,6 +530,15 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		C80000000000000000000001 /* Build configuration list for PBXNativeTarget "FissionDesktopUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C80000000000000000000002 /* Debug */,
+				C80000000000000000000003 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 
 /* Begin PBXTargetDependency section */
@@ -448,6 +546,11 @@
 			isa = PBXTargetDependency;
 			target = A50000000000000000000001 /* FissionDesktop */;
 			targetProxy = B00000000000000000000001 /* PBXContainerItemProxy */;
+		};
+		C90000000000000000000001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A50000000000000000000001 /* FissionDesktop */;
+			targetProxy = C00000000000000000000001 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 

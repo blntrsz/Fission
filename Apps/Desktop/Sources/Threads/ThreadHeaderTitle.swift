@@ -8,6 +8,7 @@ struct ThreadToolbarContent: ToolbarContent {
     var body: some ToolbarContent {
         ToolbarItem(placement: .navigation) {
             Button("New Thread", systemImage: "plus", action: createThread)
+                .accessibilityIdentifier("new-thread-button")
                 .keyboardShortcut("n")
         }
 

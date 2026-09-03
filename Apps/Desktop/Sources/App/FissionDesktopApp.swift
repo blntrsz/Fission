@@ -27,6 +27,15 @@ struct FissionDesktopApp: App {
     @State private var navigationModel: DesktopNavigationModel
     private let notificationCoordinator: AgentTaskNotificationCoordinator
 
+    private static var databasePath: String {
+        #if DEBUG
+        if let override = UserDefaults.standard.string(forKey: "FissionDatabasePath") {
+            return override
+        }
+        #endif
+        return ThreadListModel.applicationSupportDatabasePath
+    }
+
     private static let terminalTabsShortcutMonitor = NSEvent.addLocalMonitorForEvents(
         matching: .keyDown
     ) { event in
@@ -48,9 +57,7 @@ struct FissionDesktopApp: App {
     }
 
     init() {
-        let threadListModel = ThreadListModel(
-            databasePath: ThreadListModel.applicationSupportDatabasePath
-        )
+        let threadListModel = ThreadListModel(databasePath: Self.databasePath)
         let navigationModel = DesktopNavigationModel()
         let notificationCoordinator = AgentTaskNotificationCoordinator { threadID in
             navigationModel.open(threadID: threadID)
