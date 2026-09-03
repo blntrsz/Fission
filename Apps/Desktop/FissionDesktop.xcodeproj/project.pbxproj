@@ -23,11 +23,13 @@
 		A10000000000000000000014 /* AgentTaskNotificationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000014 /* AgentTaskNotificationCoordinator.swift */; };
 		A10000000000000000000015 /* DesktopNavigationModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000015 /* DesktopNavigationModel.swift */; };
 		A10000000000000000000016 /* NotificationSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000016 /* NotificationSettingsView.swift */; };
+		A10000000000000000000018 /* TerminalInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000018 /* TerminalInput.swift */; };
 		B10000000000000000000001 /* DesktopThreadCreatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000001 /* DesktopThreadCreatorTests.swift */; };
 		B10000000000000000000003 /* AgentActivityModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000003 /* AgentActivityModelTests.swift */; };
 		B10000000000000000000004 /* DesktopNavigationModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000004 /* DesktopNavigationModelTests.swift */; };
 		B10000000000000000000005 /* TerminalURLHandlerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000005 /* TerminalURLHandlerTests.swift */; };
 		B10000000000000000000002 /* FissionCore in Frameworks */ = {isa = PBXBuildFile; productRef = A90000000000000000000001 /* FissionCore */; };
+		B10000000000000000000006 /* TerminalInputContentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000006 /* TerminalInputContentTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -56,11 +58,13 @@
 		A20000000000000000000015 /* DesktopNavigationModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesktopNavigationModel.swift; sourceTree = "<group>"; };
 		A20000000000000000000016 /* NotificationSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationSettingsView.swift; sourceTree = "<group>"; };
 		A20000000000000000000017 /* TerminalURLHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalURLHandler.swift; sourceTree = "<group>"; };
+		A20000000000000000000018 /* TerminalInput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalInput.swift; sourceTree = "<group>"; };
 		B20000000000000000000001 /* DesktopThreadCreatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesktopThreadCreatorTests.swift; sourceTree = "<group>"; };
 		B20000000000000000000005 /* TerminalURLHandlerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalURLHandlerTests.swift; sourceTree = "<group>"; };
 		B20000000000000000000002 /* FissionDesktopTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FissionDesktopTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B20000000000000000000003 /* AgentActivityModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentActivityModelTests.swift; sourceTree = "<group>"; };
 		B20000000000000000000004 /* DesktopNavigationModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesktopNavigationModelTests.swift; sourceTree = "<group>"; };
+		B20000000000000000000006 /* TerminalInputContentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalInputContentTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -133,6 +137,7 @@
 				A20000000000000000000005 /* TerminalWorkspaceView.swift */,
 				A20000000000000000000012 /* PiAgentIntegration.swift */,
 				A20000000000000000000017 /* TerminalURLHandler.swift */,
+				A20000000000000000000018 /* TerminalInput.swift */,
 			);
 			path = Terminal;
 			sourceTree = "<group>";
@@ -162,6 +167,7 @@
 				B20000000000000000000001 /* DesktopThreadCreatorTests.swift */,
 				B20000000000000000000004 /* DesktopNavigationModelTests.swift */,
 				B20000000000000000000005 /* TerminalURLHandlerTests.swift */,
+				B20000000000000000000006 /* TerminalInputContentTests.swift */,
 			);
 			path = Tests;
 			sourceTree = "<group>";
@@ -281,6 +287,7 @@
 				A10000000000000000000015 /* DesktopNavigationModel.swift in Sources */,
 				A10000000000000000000016 /* NotificationSettingsView.swift in Sources */,
 				A10000000000000000000017 /* TerminalURLHandler.swift in Sources */,
+				A10000000000000000000018 /* TerminalInput.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -292,6 +299,7 @@
 				B10000000000000000000001 /* DesktopThreadCreatorTests.swift in Sources */,
 				B10000000000000000000004 /* DesktopNavigationModelTests.swift in Sources */,
 				B10000000000000000000005 /* TerminalURLHandlerTests.swift in Sources */,
+				B10000000000000000000006 /* TerminalInputContentTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
