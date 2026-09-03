@@ -3,6 +3,12 @@ import FissionCore
 import Foundation
 import Observation
 
+struct AgentFinishedEvent: Equatable, Sendable {
+    let threadID: UUID
+    let tabID: UUID
+    let sequence: Int64
+}
+
 @MainActor
 @Observable
 final class AgentActivityModel {
@@ -14,8 +20,13 @@ final class AgentActivityModel {
     private var activities: [UUID: [UUID: Activity]] = [:]
     private var threadsWithAgentRun: Set<UUID> = []
     @ObservationIgnored private var receiver: AgentActivityReceiver?
+    @ObservationIgnored private let onFinished: (AgentFinishedEvent) -> Void
 
-    init(installPiIntegration: Bool = true) {
+    init(
+        installPiIntegration: Bool = true,
+        onFinished: @escaping (AgentFinishedEvent) -> Void = { _ in }
+    ) {
+        self.onFinished = onFinished
         if installPiIntegration {
             PiAgentExtensionInstaller.install()
         }
@@ -85,13 +96,38 @@ final class AgentActivityModel {
         if let previous = activities[threadID]?[tabID], report.sequence <= previous.sequence {
             return
         }
-        if report.state != .idle {
+        record(
+            state: report.state,
+            threadID: threadID,
+            tabID: tabID,
+            sequence: report.sequence
+        )
+    }
+
+    func record(
+        state: AgentActivityState,
+        threadID: UUID,
+        tabID: UUID,
+        sequence: Int64
+    ) {
+        let previous = activities[threadID]?[tabID]
+        if let previous, sequence <= previous.sequence { return }
+
+        if state != .idle {
             threadsWithAgentRun.insert(threadID)
         }
         activities[threadID, default: [:]][tabID] = Activity(
-            state: report.state,
-            sequence: report.sequence
+            state: state,
+            sequence: sequence
         )
+
+        if state == .finished, previous?.state != .finished {
+            onFinished(AgentFinishedEvent(
+                threadID: threadID,
+                tabID: tabID,
+                sequence: sequence
+            ))
+        }
     }
 }
 

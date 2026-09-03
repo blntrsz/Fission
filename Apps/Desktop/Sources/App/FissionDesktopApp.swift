@@ -22,10 +22,10 @@ final class TerminalTabsShortcutRequest {
 
 @main
 struct FissionDesktopApp: App {
-    @State private var threadListModel = ThreadListModel(
-        databasePath: ThreadListModel.applicationSupportDatabasePath
-    )
-    @State private var agentActivityModel = AgentActivityModel()
+    @State private var threadListModel: ThreadListModel
+    @State private var agentActivityModel: AgentActivityModel
+    @State private var navigationModel: DesktopNavigationModel
+    private let notificationCoordinator: AgentTaskNotificationCoordinator
 
     private static let terminalTabsShortcutMonitor = NSEvent.addLocalMonitorForEvents(
         matching: .keyDown
@@ -48,6 +48,25 @@ struct FissionDesktopApp: App {
     }
 
     init() {
+        let threadListModel = ThreadListModel(
+            databasePath: ThreadListModel.applicationSupportDatabasePath
+        )
+        let navigationModel = DesktopNavigationModel()
+        let notificationCoordinator = AgentTaskNotificationCoordinator { threadID in
+            navigationModel.open(threadID: threadID)
+        }
+
+        _threadListModel = State(initialValue: threadListModel)
+        _navigationModel = State(initialValue: navigationModel)
+        _agentActivityModel = State(initialValue: AgentActivityModel { event in
+            let thread = threadListModel.threads.first(where: { $0.id == event.threadID })
+            notificationCoordinator.agentTaskFinished(
+                event,
+                threadTitle: thread?.title ?? "Thread",
+                workingDirectory: thread?.workingDirectory
+            )
+        })
+        self.notificationCoordinator = notificationCoordinator
         _ = Self.terminalTabsShortcutMonitor
     }
 
@@ -71,12 +90,17 @@ struct FissionDesktopApp: App {
         WindowGroup {
             ThreadListView(
                 model: threadListModel,
-                agentActivityModel: agentActivityModel
+                agentActivityModel: agentActivityModel,
+                navigationModel: navigationModel
             )
             .frame(minWidth: 900, minHeight: 560)
         }
         .commands {
             AppKeyboardCommands()
+        }
+
+        Settings {
+            NotificationSettingsView(coordinator: notificationCoordinator)
         }
     }
 }

@@ -6,18 +6,23 @@ import SwiftUI
 struct ThreadListView: View {
     let model: ThreadListModel
     let agentActivityModel: AgentActivityModel
+    let navigationModel: DesktopNavigationModel
     @State private var workspaceStore: ThreadWorkspaceStore
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
-    @State private var selectedThreadID: UUID?
     @State private var editingThreadID: UUID?
     @State private var renameDraft = ""
     @State private var isCreatingThread = false
     @State private var areSettledThreadsExpanded = true
     @State private var recentProjectPaths = RecentProjectPaths.load()
 
-    init(model: ThreadListModel, agentActivityModel: AgentActivityModel) {
+    init(
+        model: ThreadListModel,
+        agentActivityModel: AgentActivityModel,
+        navigationModel: DesktopNavigationModel
+    ) {
         self.model = model
         self.agentActivityModel = agentActivityModel
+        self.navigationModel = navigationModel
         _workspaceStore = State(
             initialValue: ThreadWorkspaceStore(agentActivityModel: agentActivityModel)
         )
@@ -42,7 +47,7 @@ struct ThreadListView: View {
         .onChange(of: model.threads, initial: true) { _, threads in
             synchronizeWorkspaces(with: threads)
         }
-        .onChange(of: selectedThreadID) { _, threadID in
+        .onChange(of: navigationModel.selectedThreadID) { _, threadID in
             guard let thread = model.threads.first(where: {
                 $0.id == threadID && !$0.isSettled
             }) else {
@@ -50,9 +55,11 @@ struct ThreadListView: View {
             }
             agentActivityModel.acknowledgeFinished(threadID: thread.id)
             workspaceStore.open(thread: thread)
+            navigationModel.didOpen(threadID: thread.id)
         }
         .onChange(of: selectedThreadActivityState) { _, state in
-            guard state == .finished, let selectedThreadID else { return }
+            guard state == .finished,
+                  let selectedThreadID = navigationModel.selectedThreadID else { return }
             agentActivityModel.acknowledgeFinished(threadID: selectedThreadID)
         }
         .sheet(isPresented: $isCreatingThread) {
@@ -86,13 +93,13 @@ struct ThreadListView: View {
                     description: Text("Create a Thread to start a new agent workstream.")
                 )
             } else {
-                List(selection: $selectedThreadID) {
+                List(selection: selectedThreadBinding) {
                     ForEach(activeThreads) { thread in
                         let activityState = agentActivityModel.state(for: thread.id)
                         ThreadRow(
                             thread: thread,
                             activityState: activityState,
-                            isSelected: selectedThreadID == thread.id,
+                            isSelected: navigationModel.selectedThreadID == thread.id,
                             isRenaming: editingThreadID == thread.id,
                             renameTitle: $renameDraft,
                             beginRenaming: { beginRenaming(thread) },
@@ -142,7 +149,7 @@ struct ThreadListView: View {
 
     @ViewBuilder
     private var workspaceDetail: some View {
-        if selectedThreadID == nil {
+        if navigationModel.selectedThreadID == nil {
             ContentUnavailableView(
                 "Select a Thread",
                 systemImage: "terminal",
@@ -151,7 +158,7 @@ struct ThreadListView: View {
         } else {
             ZStack {
                 ForEach(workspaceStore.workspaces) { workspace in
-                    let visible = workspace.threadID == selectedThreadID
+                    let visible = workspace.threadID == navigationModel.selectedThreadID
                     TerminalWorkspaceView(model: workspace, isVisible: visible)
                         .opacity(visible ? 1 : 0)
                         .allowsHitTesting(visible)
@@ -166,8 +173,15 @@ struct ThreadListView: View {
         columnVisibility = columnVisibility == .detailOnly ? .all : .detailOnly
     }
 
+    private var selectedThreadBinding: Binding<UUID?> {
+        Binding(
+            get: { navigationModel.selectedThreadID },
+            set: { navigationModel.select(threadID: $0) }
+        )
+    }
+
     private var selectedThread: AgentThread? {
-        model.threads.first { $0.id == selectedThreadID }
+        model.threads.first { $0.id == navigationModel.selectedThreadID }
     }
 
     private var renameThreadAction: (() -> Void)? {
@@ -176,7 +190,7 @@ struct ThreadListView: View {
     }
 
     private var selectedThreadActivityState: AgentActivityState? {
-        guard let selectedThreadID else { return nil }
+        guard let selectedThreadID = navigationModel.selectedThreadID else { return nil }
         return agentActivityModel.state(for: selectedThreadID)
     }
 
@@ -230,7 +244,7 @@ struct ThreadListView: View {
     private func reopen(_ thread: AgentThread) {
         Task {
             await model.reopen(threadID: thread.id)
-            selectedThreadID = thread.id
+            navigationModel.select(threadID: thread.id)
         }
     }
 
@@ -248,7 +262,7 @@ struct ThreadListView: View {
                 workingDirectory: directory.path,
                 createWorktree: createWorktree
             ) {
-                selectedThreadID = threadID
+                navigationModel.select(threadID: threadID)
             }
         }
     }
@@ -257,13 +271,9 @@ struct ThreadListView: View {
         workspaceStore.synchronize(threads: threads)
 
         let availableThreads = threads.filter { !$0.isSettled }
-        if let selectedThreadID,
-           availableThreads.contains(where: { $0.id == selectedThreadID }) {
-            return
-        }
-
-        selectedThreadID = availableThreads.first?.id
-        if let thread = availableThreads.first {
+        navigationModel.synchronize(availableThreadIDs: availableThreads.map(\.id))
+        if let selectedThreadID = navigationModel.selectedThreadID,
+           let thread = availableThreads.first(where: { $0.id == selectedThreadID }) {
             workspaceStore.open(thread: thread)
         }
     }
@@ -553,6 +563,7 @@ enum GitBranchResolver {
 #Preview {
     ThreadListView(
         model: ThreadListModel(databasePath: ":memory:"),
-        agentActivityModel: AgentActivityModel(installPiIntegration: false)
+        agentActivityModel: AgentActivityModel(installPiIntegration: false),
+        navigationModel: DesktopNavigationModel()
     )
 }
