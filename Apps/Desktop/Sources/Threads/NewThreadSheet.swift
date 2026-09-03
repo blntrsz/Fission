@@ -32,6 +32,11 @@ struct NewThreadSheet: View {
             moveSelection(by: 1)
             return .handled
         }
+        .onKeyPress(keys: ["n", "p"]) { keyPress in
+            guard keyPress.modifiers == .control else { return .ignored }
+            moveSelection(by: keyPress.key == "n" ? 1 : -1)
+            return .handled
+        }
         .onKeyPress(.tab) {
             guard focusedField == .project else { return .ignored }
             completeSelectedProject()
