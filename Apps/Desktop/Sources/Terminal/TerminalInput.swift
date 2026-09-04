@@ -33,6 +33,43 @@ enum TerminalInputContent {
     }
 }
 
+enum TerminalScrollInput {
+    /// Ghostty's AppKit frontend doubles precise deltas before forwarding them.
+    static func scaled(_ delta: CGFloat, isPrecise: Bool) -> CGFloat {
+        isPrecise ? delta * 2 : delta
+    }
+
+    static func event(from event: NSEvent) -> NSEvent {
+        guard event.hasPreciseScrollingDeltas else { return event }
+        return GhosttySpeedScrollEvent(original: event)
+    }
+}
+
+private final class GhosttySpeedScrollEvent: NSEvent {
+    private let original: NSEvent
+
+    init(original: NSEvent) {
+        self.original = original
+        super.init()
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override var scrollingDeltaX: CGFloat {
+        TerminalScrollInput.scaled(original.scrollingDeltaX, isPrecise: true)
+    }
+
+    override var scrollingDeltaY: CGFloat {
+        TerminalScrollInput.scaled(original.scrollingDeltaY, isPrecise: true)
+    }
+
+    override var hasPreciseScrollingDeltas: Bool { true }
+    override var momentumPhase: NSEvent.Phase { original.momentumPhase }
+}
+
 @MainActor
 final class FissionTerminalView: AppTerminalView {
     private static let acceptedDropTypes: [NSPasteboard.PasteboardType] = [
@@ -53,6 +90,10 @@ final class FissionTerminalView: AppTerminalView {
             return true
         }
         return super.performKeyEquivalent(with: event)
+    }
+
+    override func scrollWheel(with event: NSEvent) {
+        super.scrollWheel(with: TerminalScrollInput.event(from: event))
     }
 
     override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {

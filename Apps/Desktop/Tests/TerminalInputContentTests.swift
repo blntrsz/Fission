@@ -4,6 +4,41 @@ import Foundation
 import Testing
 
 struct TerminalInputContentTests {
+    @Test func preciseScrollingMatchesGhosttySpeed() throws {
+        let event = try #require(scrollEvent(units: .pixel, xDelta: 2, yDelta: -3))
+        let scaledEvent = TerminalScrollInput.event(from: event)
+
+        #expect(scaledEvent.scrollingDeltaX == event.scrollingDeltaX * 2)
+        #expect(scaledEvent.scrollingDeltaY == event.scrollingDeltaY * 2)
+        #expect(scaledEvent.hasPreciseScrollingDeltas)
+    }
+
+    @Test func preciseScrollingPreservesFractionalDeltas() {
+        #expect(TerminalScrollInput.scaled(1.25, isPrecise: true) == 2.5)
+    }
+
+    @Test func discreteScrollingIsUnchanged() throws {
+        let event = try #require(scrollEvent(units: .line, xDelta: 2, yDelta: -3))
+
+        #expect(TerminalScrollInput.event(from: event) === event)
+    }
+
+    private func scrollEvent(
+        units: CGScrollEventUnit,
+        xDelta: Int32,
+        yDelta: Int32
+    ) -> NSEvent? {
+        let coreGraphicsEvent = CGEvent(
+            scrollWheelEvent2Source: nil,
+            units: units,
+            wheelCount: 2,
+            wheel1: yDelta,
+            wheel2: xDelta,
+            wheel3: 0
+        )
+        return coreGraphicsEvent.flatMap(NSEvent.init(cgEvent:))
+    }
+
     @Test func prefersURLsOverThePasteboardString() {
         let urls = [
             URL(fileURLWithPath: "/tmp/a file.txt"),
