@@ -4,6 +4,21 @@ import Foundation
 import Testing
 
 struct TerminalInputContentTests {
+    @Test func commandShiftClickRemovesOnlyShiftForGhosttyLinkActivation() {
+        let modifiers: NSEvent.ModifierFlags = [.command, .shift, .option, .capsLock]
+
+        #expect(
+            TerminalLinkActivation.modifiersForGhostty(modifiers)
+                == [.command, .option, .capsLock]
+        )
+    }
+
+    @Test func shiftWithoutCommandIsPreservedForTerminalSelection() {
+        let modifiers: NSEvent.ModifierFlags = [.shift, .option]
+
+        #expect(TerminalLinkActivation.modifiersForGhostty(modifiers) == modifiers)
+    }
+
     @Test func prefersURLsOverThePasteboardString() {
         let urls = [
             URL(fileURLWithPath: "/tmp/a file.txt"),

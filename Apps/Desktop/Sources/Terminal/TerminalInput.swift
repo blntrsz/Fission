@@ -33,6 +33,38 @@ enum TerminalInputContent {
     }
 }
 
+/// Ghostty's default macOS link binding compares modifiers exactly against Command.
+/// Its mouse-capture path removes Shift before matching links; do the same at the
+/// embedding boundary because `AppTerminalView` does not expose capture state.
+enum TerminalLinkActivation {
+    static func modifiersForGhostty(
+        _ modifiers: NSEvent.ModifierFlags
+    ) -> NSEvent.ModifierFlags {
+        guard modifiers.contains([.command, .shift]) else { return modifiers }
+
+        var linkModifiers = modifiers
+        linkModifiers.remove(.shift)
+        return linkModifiers
+    }
+
+    static func eventForGhostty(_ event: NSEvent) -> NSEvent {
+        let modifiers = modifiersForGhostty(event.modifierFlags)
+        guard modifiers != event.modifierFlags else { return event }
+
+        return NSEvent.mouseEvent(
+            with: event.type,
+            location: event.locationInWindow,
+            modifierFlags: modifiers,
+            timestamp: event.timestamp,
+            windowNumber: event.windowNumber,
+            context: nil,
+            eventNumber: event.eventNumber,
+            clickCount: event.clickCount,
+            pressure: event.pressure
+        ) ?? event
+    }
+}
+
 @MainActor
 final class FissionTerminalView: AppTerminalView {
     private static let acceptedDropTypes: [NSPasteboard.PasteboardType] = [
@@ -53,6 +85,18 @@ final class FissionTerminalView: AppTerminalView {
             return true
         }
         return super.performKeyEquivalent(with: event)
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        super.mouseDown(with: TerminalLinkActivation.eventForGhostty(event))
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        super.mouseUp(with: TerminalLinkActivation.eventForGhostty(event))
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        super.mouseMoved(with: TerminalLinkActivation.eventForGhostty(event))
     }
 
     override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
