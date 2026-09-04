@@ -1,5 +1,5 @@
 {
-  "originHash" : "bf43dbfb9d2d7be50bbfafd95945be50561c640df369845c377d64cca2fe8ea2",
+  "originHash" : "810494c7dde3d9d0378674121fcf590ae622bd137a184b1ede4ea001cce31bd0",
   "pins" : [
     {
       "identity" : "grdb.swift",
@@ -13,10 +13,10 @@
     {
       "identity" : "libghostty-spm",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/Lakr233/libghostty-spm.git",
+      "location" : "https://github.com/blntrsz/libghostty-spm.git",
       "state" : {
-        "revision" : "4a92e0102ba134b7f4bdd7a2d1c3b9cfa9614edd",
-        "version" : "1.5.2"
+        "branch" : "main",
+        "revision" : "53f451ea42493a3ee7d16e3779c3b7a2fb0058d9"
       }
     },
     {

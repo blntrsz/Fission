@@ -564,10 +564,10 @@
 /* Begin XCRemoteSwiftPackageReference section */
 		A90000000000000000000003 /* XCRemoteSwiftPackageReference "libghostty-spm" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/Lakr233/libghostty-spm.git";
+			repositoryURL = "https://github.com/blntrsz/libghostty-spm.git";
 			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 1.5.2;
+				kind = revision;
+				revision = 53f451ea42493a3ee7d16e3779c3b7a2fb0058d9;
 			};
 		};
 /* End XCRemoteSwiftPackageReference section */
