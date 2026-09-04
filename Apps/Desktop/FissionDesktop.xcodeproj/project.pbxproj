@@ -24,6 +24,11 @@
 		A10000000000000000000015 /* DesktopNavigationModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000015 /* DesktopNavigationModel.swift */; };
 		A10000000000000000000016 /* NotificationSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000016 /* NotificationSettingsView.swift */; };
 		A10000000000000000000018 /* TerminalInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000018 /* TerminalInput.swift */; };
+		D10000000000000000000001 /* TerminalExecutionProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = D20000000000000000000001 /* TerminalExecutionProtocol.swift */; };
+		D10000000000000000000002 /* TerminalExecutionClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = D20000000000000000000002 /* TerminalExecutionClient.swift */; };
+		D10000000000000000000003 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = D20000000000000000000003 /* main.swift */; };
+		D10000000000000000000004 /* TerminalExecutionProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = D20000000000000000000001 /* TerminalExecutionProtocol.swift */; };
+		D10000000000000000000005 /* FissionExecution in Embed Execution Helper */ = {isa = PBXBuildFile; fileRef = D20000000000000000000004 /* FissionExecution */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		B10000000000000000000001 /* DesktopThreadCreatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000001 /* DesktopThreadCreatorTests.swift */; };
 		B10000000000000000000003 /* AgentActivityModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000003 /* AgentActivityModelTests.swift */; };
 		B10000000000000000000004 /* DesktopNavigationModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000004 /* DesktopNavigationModelTests.swift */; };
@@ -47,6 +52,13 @@
 			proxyType = 1;
 			remoteGlobalIDString = A50000000000000000000001;
 			remoteInfo = FissionDesktop;
+		};
+		D00000000000000000000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A70000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = D50000000000000000000001;
+			remoteInfo = FissionExecution;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -75,7 +87,25 @@
 		B20000000000000000000006 /* TerminalInputContentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalInputContentTests.swift; sourceTree = "<group>"; };
 		C20000000000000000000001 /* FissionDesktopUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FissionDesktopUITests.swift; sourceTree = "<group>"; };
 		C20000000000000000000002 /* FissionDesktopUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FissionDesktopUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		D20000000000000000000001 /* TerminalExecutionProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalExecutionProtocol.swift; sourceTree = "<group>"; };
+		D20000000000000000000002 /* TerminalExecutionClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalExecutionClient.swift; sourceTree = "<group>"; };
+		D20000000000000000000003 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
+		D20000000000000000000004 /* FissionExecution */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = FissionExecution; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		D60000000000000000000003 /* Embed Execution Helper */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = Contents/Helpers;
+			dstSubfolderSpec = 1;
+			files = (
+				D10000000000000000000005 /* FissionExecution in Embed Execution Helper */,
+			);
+			name = "Embed Execution Helper";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		A30000000000000000000001 /* Frameworks */ = {
@@ -102,6 +132,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		D30000000000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -122,6 +159,7 @@
 				A40000000000000000000003 /* App */,
 				A40000000000000000000004 /* Threads */,
 				A40000000000000000000006 /* Terminal */,
+				D40000000000000000000001 /* Execution */,
 			);
 			path = Sources;
 			sourceTree = "<group>";
@@ -156,6 +194,8 @@
 				A20000000000000000000012 /* PiAgentIntegration.swift */,
 				A20000000000000000000017 /* TerminalURLHandler.swift */,
 				A20000000000000000000018 /* TerminalInput.swift */,
+				D20000000000000000000001 /* TerminalExecutionProtocol.swift */,
+				D20000000000000000000002 /* TerminalExecutionClient.swift */,
 			);
 			path = Terminal;
 			sourceTree = "<group>";
@@ -169,10 +209,19 @@
 			path = Resources;
 			sourceTree = "<group>";
 		};
+		D40000000000000000000001 /* Execution */ = {
+			isa = PBXGroup;
+			children = (
+				D20000000000000000000003 /* main.swift */,
+			);
+			path = Execution;
+			sourceTree = "<group>";
+		};
 		A40000000000000000000005 /* Products */ = {
 			isa = PBXGroup;
 			children = (
 				A20000000000000000000004 /* FissionDesktop.app */,
+				D20000000000000000000004 /* FissionExecution */,
 				B20000000000000000000002 /* FissionDesktopTests.xctest */,
 				C20000000000000000000002 /* FissionDesktopUITests.xctest */,
 			);
@@ -209,10 +258,12 @@
 				A60000000000000000000001 /* Sources */,
 				A30000000000000000000001 /* Frameworks */,
 				A60000000000000000000002 /* Resources */,
+				D60000000000000000000003 /* Embed Execution Helper */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				D90000000000000000000001 /* PBXTargetDependency */,
 			);
 			name = FissionDesktop;
 			packageProductDependencies = (
@@ -262,6 +313,24 @@
 			productReference = C20000000000000000000002 /* FissionDesktopUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		D50000000000000000000001 /* FissionExecution */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D80000000000000000000001 /* Build configuration list for PBXNativeTarget "FissionExecution" */;
+			buildPhases = (
+				D60000000000000000000001 /* Sources */,
+				D30000000000000000000001 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = FissionExecution;
+			packageProductDependencies = (
+			);
+			productName = FissionExecution;
+			productReference = D20000000000000000000004 /* FissionExecution */;
+			productType = "com.apple.product-type.tool";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -273,6 +342,9 @@
 				LastUpgradeCheck = 2660;
 				TargetAttributes = {
 					A50000000000000000000001 = {
+						CreatedOnToolsVersion = 26.0;
+					};
+					D50000000000000000000001 = {
 						CreatedOnToolsVersion = 26.0;
 					};
 					B50000000000000000000001 = {
@@ -303,6 +375,7 @@
 			projectRoot = "";
 			targets = (
 				A50000000000000000000001 /* FissionDesktop */,
+				D50000000000000000000001 /* FissionExecution */,
 				B50000000000000000000001 /* FissionDesktopTests */,
 				C50000000000000000000001 /* FissionDesktopUITests */,
 			);
@@ -339,6 +412,8 @@
 				A10000000000000000000016 /* NotificationSettingsView.swift in Sources */,
 				A10000000000000000000017 /* TerminalURLHandler.swift in Sources */,
 				A10000000000000000000018 /* TerminalInput.swift in Sources */,
+				D10000000000000000000001 /* TerminalExecutionProtocol.swift in Sources */,
+				D10000000000000000000002 /* TerminalExecutionClient.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -359,6 +434,15 @@
 			buildActionMask = 2147483647;
 			files = (
 				C10000000000000000000001 /* FissionDesktopUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		D60000000000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D10000000000000000000003 /* main.swift in Sources */,
+				D10000000000000000000004 /* TerminalExecutionProtocol.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -500,6 +584,34 @@
 			};
 			name = Release;
 		};
+		D80000000000000000000002 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				ENABLE_HARDENED_RUNTIME = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_NAME = FissionExecution;
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = macosx;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		D80000000000000000000003 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				ENABLE_HARDENED_RUNTIME = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_NAME = FissionExecution;
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = macosx;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -539,6 +651,15 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		D80000000000000000000001 /* Build configuration list for PBXNativeTarget "FissionExecution" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D80000000000000000000002 /* Debug */,
+				D80000000000000000000003 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 
 /* Begin PBXTargetDependency section */
@@ -551,6 +672,11 @@
 			isa = PBXTargetDependency;
 			target = A50000000000000000000001 /* FissionDesktop */;
 			targetProxy = C00000000000000000000001 /* PBXContainerItemProxy */;
+		};
+		D90000000000000000000001 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = D50000000000000000000001 /* FissionExecution */;
+			targetProxy = D00000000000000000000001 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 

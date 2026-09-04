@@ -126,6 +126,7 @@ final class FissionDesktopUITests: XCTestCase {
         app.launchEnvironment["PI_CODING_AGENT_DIR"] = root
             .appending(path: ".pi/agent", directoryHint: .isDirectory)
             .path
+        app.launchEnvironment["FISSION_EXECUTION_EPHEMERAL"] = "1"
         app.launch()
 
         return TestContext(

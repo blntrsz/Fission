@@ -255,10 +255,12 @@ struct ThreadListView: View {
 
     private func deleteThreads(at offsets: IndexSet, from threads: [AgentThread]) {
         let ids = offsets.map { threads[$0].id }
+        for id in ids { workspaceStore.terminate(threadID: id) }
         Task { await model.deleteThreads(ids: ids) }
     }
 
     private func settle(_ thread: AgentThread) {
+        workspaceStore.terminate(threadID: thread.id)
         Task { await model.settle(threadID: thread.id) }
     }
 

@@ -14,6 +14,16 @@ The task watches the desktop and Core Swift sources. When they change, it rebuil
 
 You can also open `FissionDesktop.xcodeproj`, select **My Mac**, and press Run. The app persists Threads in SQLite through the local `FissionCore` package.
 
+### Persistent terminals
+
+Fission embeds and launches the `FissionExecution` helper on demand. The helper owns terminal PTYs
+and keeps them running when the window closes or the app quits. Reopening Fission reattaches the
+Ghostty renderer and replays up to 4 MiB of recent output per terminal.
+
+Closing a terminal tab or settling its Thread intentionally terminates its shell. The helper does
+not yet restore work through logout, reboot, or a helper crash, and Pi activity notifications still
+belong to the GUI process even though the underlying Pi process continues.
+
 ### Pi activity integration
 
 On launch, Fission installs its bundled Pi extension at
