@@ -65,14 +65,9 @@ struct FissionDesktopApp: App {
 
         _threadListModel = State(initialValue: threadListModel)
         _navigationModel = State(initialValue: navigationModel)
-        _agentActivityModel = State(initialValue: AgentActivityModel { event in
-            let thread = threadListModel.threads.first(where: { $0.id == event.threadID })
-            notificationCoordinator.agentTaskFinished(
-                event,
-                threadTitle: thread?.title ?? "Thread",
-                workingDirectory: thread?.workingDirectory
-            )
-        })
+        _agentActivityModel = State(initialValue: AgentActivityModel(
+            notificationAdapter: notificationCoordinator
+        ))
         self.notificationCoordinator = notificationCoordinator
         _ = Self.terminalTabsShortcutMonitor
     }

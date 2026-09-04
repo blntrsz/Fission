@@ -6,8 +6,8 @@ struct NotificationPreferences {
     static let agentTaskFinishedKey = "notifications.agentTaskFinished"
 }
 
-final class AgentTaskNotificationCoordinator: NSObject, UNUserNotificationCenterDelegate,
-    @unchecked Sendable {
+final class AgentTaskNotificationCoordinator: NSObject, AgentActivityNotificationAdapter,
+    UNUserNotificationCenterDelegate, @unchecked Sendable {
     private static let threadIDKey = "threadID"
 
     private let center: UNUserNotificationCenter
@@ -36,11 +36,7 @@ final class AgentTaskNotificationCoordinator: NSObject, UNUserNotificationCenter
         await center.notificationSettings().authorizationStatus
     }
 
-    func agentTaskFinished(
-        _ event: AgentFinishedEvent,
-        threadTitle: String,
-        workingDirectory: String?
-    ) {
+    func notifyAgentFinished(_ notification: AgentFinishedNotification) {
         guard UserDefaults.standard.bool(forKey: NotificationPreferences.agentTaskFinishedKey) else {
             return
         }
@@ -50,18 +46,18 @@ final class AgentTaskNotificationCoordinator: NSObject, UNUserNotificationCenter
             guard status == .authorized || status == .provisional else { return }
 
             let content = UNMutableNotificationContent()
-            content.title = "\"\(threadTitle)\" finished"
-            if let projectName = Self.projectName(for: workingDirectory) {
+            content.title = "\"\(notification.threadTitle)\" finished"
+            if let projectName = Self.projectName(for: notification.workingDirectory) {
                 content.body = projectName
             }
             content.sound = .default
-            content.userInfo = [Self.threadIDKey: event.threadID.uuidString]
+            content.userInfo = [Self.threadIDKey: notification.threadID.uuidString]
 
             let identifier = [
                 "agent-finished",
-                event.threadID.uuidString,
-                event.tabID.uuidString,
-                String(event.sequence)
+                notification.threadID.uuidString,
+                notification.tabID.uuidString,
+                String(notification.sequence)
             ].joined(separator: ".")
 
             do {

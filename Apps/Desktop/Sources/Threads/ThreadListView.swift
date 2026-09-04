@@ -8,6 +8,7 @@ struct ThreadListView: View {
     let model: ThreadListModel
     let agentActivityModel: AgentActivityModel
     let navigationModel: DesktopNavigationModel
+    @Environment(\.scenePhase) private var scenePhase
     @State private var workspaceStore: ThreadWorkspaceStore
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
     @State private var editingThreadID: UUID?
@@ -45,24 +46,26 @@ struct ThreadListView: View {
                 createThread: { isCreatingThread = true }
             )
         }
-        .task { await model.load() }
-        .onChange(of: model.threads, initial: true) { _, threads in
+        .task {
+            await model.load()
+            synchronizeWorkspaces(with: model.threads)
+            updateAgentAttention(selectedThreadID: navigationModel.selectedThreadID)
+        }
+        .onChange(of: model.threads) { _, threads in
             synchronizeWorkspaces(with: threads)
         }
         .onChange(of: navigationModel.selectedThreadID) { _, threadID in
+            updateAgentAttention(selectedThreadID: threadID)
             guard let thread = model.threads.first(where: {
                 $0.id == threadID && !$0.isSettled
             }) else {
                 return
             }
-            agentActivityModel.acknowledgeFinished(threadID: thread.id)
             workspaceStore.open(thread: thread)
             navigationModel.didOpen(threadID: thread.id)
         }
-        .onChange(of: selectedThreadActivityState) { _, state in
-            guard state == .finished,
-                  let selectedThreadID = navigationModel.selectedThreadID else { return }
-            agentActivityModel.acknowledgeFinished(threadID: selectedThreadID)
+        .onChange(of: scenePhase) { _, _ in
+            updateAgentAttention(selectedThreadID: navigationModel.selectedThreadID)
         }
         .sheet(isPresented: $isCreatingThread) {
             NewThreadSheet(
@@ -98,7 +101,7 @@ struct ThreadListView: View {
                 ScrollViewReader { proxy in
                     List(selection: selectedThreadBinding) {
                         ForEach(activeThreads) { thread in
-                            let activityStates = agentActivityModel.states(for: thread.id)
+                            let activityStates = activityStates(for: thread.id)
                             ThreadRow(
                                 thread: thread,
                                 activityStates: activityStates,
@@ -124,7 +127,7 @@ struct ThreadListView: View {
 
                             if areSettledThreadsExpanded {
                                 ForEach(settledThreads) { thread in
-                                    let activityStates = agentActivityModel.states(for: thread.id)
+                                    let activityStates = activityStates(for: thread.id)
                                     ThreadRow(
                                         thread: thread,
                                         activityStates: activityStates,
@@ -198,9 +201,18 @@ struct ThreadListView: View {
         return beginRenamingSelectedThread
     }
 
-    private var selectedThreadActivityState: AgentActivityState? {
-        guard let selectedThreadID = navigationModel.selectedThreadID else { return nil }
-        return agentActivityModel.state(for: selectedThreadID)
+    private func activityStates(for threadID: UUID) -> [AgentActivityState] {
+        agentActivityModel.activities(for: threadID)
+            .sorted { $0.key.uuidString < $1.key.uuidString }
+            .prefix(10)
+            .map(\.value)
+    }
+
+    private func updateAgentAttention(selectedThreadID: UUID?) {
+        agentActivityModel.updateAttention(
+            selectedThreadID: selectedThreadID,
+            isAppActive: scenePhase == .active
+        )
     }
 
     private var activeThreads: [AgentThread] {
@@ -278,6 +290,7 @@ struct ThreadListView: View {
     }
 
     private func synchronizeWorkspaces(with threads: [AgentThread]) {
+        agentActivityModel.synchronizeThreads(threads)
         workspaceStore.synchronize(threads: threads)
 
         let availableThreads = threads.filter { !$0.isSettled }

@@ -3,138 +3,190 @@ import FissionCore
 import Foundation
 import Observation
 
-struct AgentFinishedEvent: Equatable, Sendable {
+struct AgentFinishedNotification: Equatable, Sendable {
     let threadID: UUID
     let tabID: UUID
     let sequence: Int64
+    let threadTitle: String
+    let workingDirectory: String?
+}
+
+protocol AgentActivityNotificationAdapter: Sendable {
+    func notifyAgentFinished(_ notification: AgentFinishedNotification) throws
+}
+
+protocol AgentActivityReportSource: AnyObject, Sendable {
+    var token: String { get }
+    var environment: [String: String] { get }
+    func start(onReport: @escaping @Sendable (Data) -> Void)
+}
+
+private struct IgnoreAgentActivityNotifications: AgentActivityNotificationAdapter {
+    func notifyAgentFinished(_ notification: AgentFinishedNotification) {}
 }
 
 @MainActor
 @Observable
 final class AgentActivityModel {
+    private struct SessionID: Hashable {
+        let threadID: UUID
+        let tabID: UUID
+    }
+
     private struct Activity {
         var state: AgentActivityState
+        var reportedState: AgentActivityState
         var sequence: Int64
     }
 
-    private var activities: [UUID: [UUID: Activity]] = [:]
+    private struct ThreadMetadata {
+        let title: String
+        let workingDirectory: String?
+    }
+
+    private var activitiesByThread: [UUID: [UUID: Activity]] = [:]
     private var threadsWithAgentRun: Set<UUID> = []
-    @ObservationIgnored private var receiver: AgentActivityReceiver?
-    @ObservationIgnored private let onFinished: (AgentFinishedEvent) -> Void
+    private var activeSessions: Set<SessionID> = []
+    private var threadMetadata: [UUID: ThreadMetadata] = [:]
+    private var selectedThreadID: UUID?
+    private var isAppActive = false
+
+    @ObservationIgnored private let reportSource: (any AgentActivityReportSource)?
+    @ObservationIgnored private let notificationAdapter: any AgentActivityNotificationAdapter
 
     init(
         installPiIntegration: Bool = true,
-        onFinished: @escaping (AgentFinishedEvent) -> Void = { _ in }
+        reportSource providedReportSource: (any AgentActivityReportSource)? = nil,
+        notificationAdapter: any AgentActivityNotificationAdapter = IgnoreAgentActivityNotifications()
     ) {
-        self.onFinished = onFinished
+        self.notificationAdapter = notificationAdapter
+
         if installPiIntegration {
             PiAgentExtensionInstaller.install()
         }
 
-        do {
-            let receiver = try AgentActivityReceiver()
-            self.receiver = receiver
-            receiver.start { [weak self] report in
-                Task { @MainActor in
-                    self?.accept(report)
-                }
+        if let providedReportSource {
+            reportSource = providedReportSource
+        } else {
+            do {
+                reportSource = try AgentActivityReceiver()
+            } catch {
+                reportSource = nil
+                NSLog("Fission could not start the agent activity receiver: %@", String(describing: error))
             }
-        } catch {
-            NSLog("Fission could not start the agent activity receiver: %@", String(describing: error))
+        }
+
+        reportSource?.start { [weak self] data in
+            Task { @MainActor in
+                self?.accept(data)
+            }
         }
     }
 
     func environment(threadID: UUID, tabID: UUID) -> [String: String] {
-        guard let receiver else { return [:] }
-        return [
-            "FISSION_AGENT_PORT": String(receiver.port),
-            "FISSION_AGENT_TOKEN": receiver.token,
+        activeSessions.insert(SessionID(threadID: threadID, tabID: tabID))
+        guard let reportSource else { return [:] }
+
+        return reportSource.environment.merging([
             "FISSION_THREAD_ID": threadID.uuidString,
             "FISSION_TAB_ID": tabID.uuidString
-        ]
+        ]) { _, sessionValue in sessionValue }
     }
 
-    func state(for threadID: UUID) -> AgentActivityState? {
-        guard threadsWithAgentRun.contains(threadID) else { return nil }
-        let states = activities[threadID]?.values.map(\.state) ?? []
-        if states.contains(.blocked) { return .blocked }
-        if states.contains(.running) { return .running }
-        if states.contains(.finished) { return .finished }
-        return .idle
+    func activities(for threadID: UUID) -> [UUID: AgentActivityState] {
+        guard threadsWithAgentRun.contains(threadID) else { return [:] }
+        return (activitiesByThread[threadID] ?? [:]).mapValues(\.state)
     }
 
-    func states(for threadID: UUID) -> [AgentActivityState] {
-        guard threadsWithAgentRun.contains(threadID) else { return [] }
-        return (activities[threadID] ?? [:])
-            .sorted { $0.key.uuidString < $1.key.uuidString }
-            .prefix(10)
-            .map { $0.value.state }
-    }
-
-    func acknowledgeFinished(threadID: UUID) {
-        guard var threadActivities = activities[threadID] else { return }
-        for tabID in threadActivities.keys where threadActivities[tabID]?.state == .finished {
-            threadActivities[tabID]?.state = .idle
+    func updateAttention(selectedThreadID: UUID?, isAppActive: Bool) {
+        self.selectedThreadID = selectedThreadID
+        self.isAppActive = isAppActive
+        if let selectedThreadID {
+            acknowledgeFinished(threadID: selectedThreadID)
         }
-        activities[threadID] = threadActivities
+    }
+
+    func synchronizeThreads(_ threads: [AgentThread]) {
+        threadMetadata = Dictionary(uniqueKeysWithValues: threads.map {
+            ($0.id, ThreadMetadata(title: $0.title, workingDirectory: $0.workingDirectory))
+        })
     }
 
     func forget(threadID: UUID, tabID: UUID) {
-        activities[threadID]?[tabID] = nil
-        if activities[threadID]?.isEmpty == true {
-            activities[threadID] = nil
+        let session = SessionID(threadID: threadID, tabID: tabID)
+        activeSessions.remove(session)
+        activitiesByThread[threadID]?[tabID] = nil
+        if activitiesByThread[threadID]?.isEmpty == true {
+            activitiesByThread[threadID] = nil
+            threadsWithAgentRun.remove(threadID)
         }
     }
 
     func forget(threadID: UUID) {
-        activities[threadID] = nil
+        activeSessions = Set(activeSessions.filter { $0.threadID != threadID })
+        activitiesByThread[threadID] = nil
         threadsWithAgentRun.remove(threadID)
+        threadMetadata[threadID] = nil
     }
 
-    private func accept(_ report: AgentActivityReport) {
-        guard report.version == 1,
-              report.token == receiver?.token,
+    private func accept(_ data: Data) {
+        guard let report = try? JSONDecoder().decode(AgentActivityReport.self, from: data),
+              report.version == 1,
+              report.token == reportSource?.token,
               report.agent == "pi",
               let threadID = UUID(uuidString: report.threadId),
-              let tabID = UUID(uuidString: report.tabId)
+              let tabID = UUID(uuidString: report.tabId),
+              activeSessions.contains(SessionID(threadID: threadID, tabID: tabID))
         else {
             return
         }
 
-        if let previous = activities[threadID]?[tabID], report.sequence <= previous.sequence {
-            return
-        }
-        record(
-            state: report.state,
-            threadID: threadID,
-            tabID: tabID,
-            sequence: report.sequence
-        )
-    }
+        let previous = activitiesByThread[threadID]?[tabID]
+        if let previous, report.sequence <= previous.sequence { return }
 
-    func record(
-        state: AgentActivityState,
-        threadID: UUID,
-        tabID: UUID,
-        sequence: Int64
-    ) {
-        let previous = activities[threadID]?[tabID]
-        if let previous, sequence <= previous.sequence { return }
-
-        if state != .idle {
+        if report.state != .idle {
             threadsWithAgentRun.insert(threadID)
         }
-        activities[threadID, default: [:]][tabID] = Activity(
-            state: state,
-            sequence: sequence
+        activitiesByThread[threadID, default: [:]][tabID] = Activity(
+            state: report.state,
+            reportedState: report.state,
+            sequence: report.sequence
         )
 
-        if state == .finished, previous?.state != .finished {
-            onFinished(AgentFinishedEvent(
-                threadID: threadID,
-                tabID: tabID,
-                sequence: sequence
-            ))
+        let enteredFinishedActivity = report.state == .finished
+            && previous?.reportedState != .finished
+        if enteredFinishedActivity,
+           !(isAppActive && selectedThreadID == threadID) {
+            notifyFinished(threadID: threadID, tabID: tabID, sequence: report.sequence)
+        }
+
+        if selectedThreadID == threadID {
+            acknowledgeFinished(threadID: threadID)
+        }
+    }
+
+    private func acknowledgeFinished(threadID: UUID) {
+        guard var threadActivities = activitiesByThread[threadID] else { return }
+        for tabID in threadActivities.keys where threadActivities[tabID]?.state == .finished {
+            threadActivities[tabID]?.state = .idle
+        }
+        activitiesByThread[threadID] = threadActivities
+    }
+
+    private func notifyFinished(threadID: UUID, tabID: UUID, sequence: Int64) {
+        let metadata = threadMetadata[threadID]
+        let notification = AgentFinishedNotification(
+            threadID: threadID,
+            tabID: tabID,
+            sequence: sequence,
+            threadTitle: metadata?.title ?? "Thread",
+            workingDirectory: metadata?.workingDirectory
+        )
+
+        do {
+            try notificationAdapter.notifyAgentFinished(notification)
+        } catch {
+            NSLog("Fission could not send an agent notification: %@", String(describing: error))
         }
     }
 }
@@ -149,14 +201,21 @@ private struct AgentActivityReport: Decodable, Sendable {
     let sequence: Int64
 }
 
-private final class AgentActivityReceiver: @unchecked Sendable {
+private final class AgentActivityReceiver: AgentActivityReportSource, @unchecked Sendable {
     let port: UInt16
     let token = UUID().uuidString
+
+    var environment: [String: String] {
+        [
+            "FISSION_AGENT_PORT": String(port),
+            "FISSION_AGENT_TOKEN": token
+        ]
+    }
 
     private let descriptor: Int32
     private let source: DispatchSourceRead
     private let queue = DispatchQueue(label: "com.fission.agent-activity")
-    private var onReport: (@Sendable (AgentActivityReport) -> Void)?
+    private var onReport: (@Sendable (Data) -> Void)?
 
     init() throws {
         let descriptor = Darwin.socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)
@@ -175,7 +234,7 @@ private final class AgentActivityReceiver: @unchecked Sendable {
         }
         guard bindResult == 0 else {
             Darwin.close(descriptor)
-            throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+            throw POSIXError(.EIO)
         }
 
         var boundAddress = sockaddr_in()
@@ -187,7 +246,7 @@ private final class AgentActivityReceiver: @unchecked Sendable {
         }
         guard nameResult == 0 else {
             Darwin.close(descriptor)
-            throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+            throw POSIXError(.EIO)
         }
 
         self.descriptor = descriptor
@@ -198,7 +257,7 @@ private final class AgentActivityReceiver: @unchecked Sendable {
         }
     }
 
-    func start(onReport: @escaping @Sendable (AgentActivityReport) -> Void) {
+    func start(onReport: @escaping @Sendable (Data) -> Void) {
         self.onReport = onReport
         source.setEventHandler { [weak self] in
             self?.receiveAvailableReports()
@@ -213,12 +272,7 @@ private final class AgentActivityReceiver: @unchecked Sendable {
                 Darwin.recv(descriptor, buffer.baseAddress, buffer.count, MSG_DONTWAIT)
             }
             guard count > 0 else { return }
-
-            let data = Data(bytes.prefix(Int(count)))
-            guard let report = try? JSONDecoder().decode(AgentActivityReport.self, from: data) else {
-                continue
-            }
-            onReport?(report)
+            onReport?(Data(bytes.prefix(Int(count))))
         }
     }
 
