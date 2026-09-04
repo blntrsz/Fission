@@ -8,7 +8,7 @@ struct ThreadListView: View {
     @State private var searchText = ""
     @State private var sortOrder = ThreadSortOrder.recentlyUpdated
     @State private var isSettledExpanded = false
-    @State private var settledDisplayLimit = 10
+    @State private var settledDisplayLimit = 20
 
     var body: some View {
         NavigationStack {
@@ -270,10 +270,10 @@ struct ThreadListView: View {
 
                 if settledThreads.count > settledDisplayLimit {
                     Button {
-                        settledDisplayLimit += 10
+                        settledDisplayLimit += 20
                     } label: {
                         Text(
-                            "Show more (\(settledThreads.count - settledDisplayLimit) settled hidden)"
+                            "Load more (\(settledThreads.count - settledDisplayLimit) remaining)"
                         )
                         .font(.system(size: 16, weight: .medium))
                         .foregroundStyle(.secondary)

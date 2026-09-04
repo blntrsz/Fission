@@ -104,6 +104,48 @@ final class FissionDesktopUITests: XCTestCase {
     }
 
     @MainActor
+    func testSettledAccordionLoadsTwentyThreadsAtATime() throws {
+        continueAfterFailure = false
+
+        let context = try launchIsolatedApp()
+        let app = context.app
+        defer {
+            app.terminate()
+            try? FileManager.default.removeItem(at: context.root)
+        }
+
+        XCTAssertTrue(app.staticTexts["Explore Fission"].waitForExistence(timeout: 10))
+        app.terminate()
+        try seedThreads(count: 25, status: "settled", databaseURL: context.databaseURL)
+        app.launch()
+
+        XCTAssertTrue(app.staticTexts["Seed 24"].waitForExistence(timeout: 10))
+        XCTAssertFalse(
+            app.staticTexts["Seed 04"].exists,
+            "The twenty-first settled Thread should initially be hidden."
+        )
+
+        let loadMore = app.buttons["load-more-settled-threads"]
+        XCTAssertTrue(loadMore.waitForExistence(timeout: 10))
+        let threadList = app.outlines.firstMatch
+        for _ in 0..<20 where !loadMore.isHittable {
+            threadList.swipeUp()
+        }
+        XCTAssertTrue(loadMore.isHittable)
+        loadMore.click()
+
+        XCTAssertTrue(
+            app.staticTexts["Seed 04"].waitForExistence(timeout: 10),
+            "Loading more should reveal the remaining settled Threads."
+        )
+
+        let screenshot = XCTAttachment(screenshot: app.windows.firstMatch.screenshot())
+        screenshot.name = "Loaded More Settled Threads"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+    }
+
+    @MainActor
     private func launchIsolatedApp() throws -> TestContext {
         let root = FileManager.default.temporaryDirectory
             .appending(path: "fission-ui-test-\(UUID().uuidString)", directoryHint: .isDirectory)
@@ -126,6 +168,7 @@ final class FissionDesktopUITests: XCTestCase {
         app.launchEnvironment["PI_CODING_AGENT_DIR"] = root
             .appending(path: ".pi/agent", directoryHint: .isDirectory)
             .path
+        app.launchEnvironment["FISSION_EXECUTION_EPHEMERAL"] = "1"
         app.launch()
 
         return TestContext(
@@ -142,10 +185,14 @@ final class FissionDesktopUITests: XCTestCase {
         waitForExpectations(timeout: 5)
     }
 
-    private func seedThreads(count: Int, databaseURL: URL) throws {
+    private func seedThreads(
+        count: Int,
+        status: String = "active",
+        databaseURL: URL
+    ) throws {
         let values = (0..<count).map { index in
             let id = String(format: "00000000-0000-0000-0000-%012d", index)
-            return "('\(id)', 'Seed \(String(format: "%02d", index))', 'active', NULL, \(index), \(index))"
+            return "('\(id)', 'Seed \(String(format: "%02d", index))', '\(status)', NULL, \(index), \(index))"
         }.joined(separator: ",")
 
         let process = Process()

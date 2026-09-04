@@ -16,6 +16,7 @@ struct ThreadListView: View {
     @State private var isCreatingThread = false
     @State private var mostRecentlyCreatedThreadID: UUID?
     @State private var areSettledThreadsExpanded = true
+    @State private var settledDisplayLimit = 20
     @State private var recentProjectPaths = RecentProjectPaths.load()
 
     init(
@@ -126,7 +127,7 @@ struct ThreadListView: View {
                             settledThreadsAccordion
 
                             if areSettledThreadsExpanded {
-                                ForEach(settledThreads) { thread in
+                                ForEach(displayedSettledThreads) { thread in
                                     let activityStates = activityStates(for: thread.id)
                                     ThreadRow(
                                         thread: thread,
@@ -143,7 +144,22 @@ struct ThreadListView: View {
                                     .listRowInsets(threadRowInsets())
                                 }
                                 .onDelete { offsets in
-                                    deleteThreads(at: offsets, from: settledThreads)
+                                    deleteThreads(at: offsets, from: displayedSettledThreads)
+                                }
+
+                                if remainingSettledThreadCount > 0 {
+                                    Button {
+                                        settledDisplayLimit += 20
+                                    } label: {
+                                        Text("Load more (\(remainingSettledThreadCount) remaining)")
+                                            .frame(maxWidth: .infinity, alignment: .center)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .foregroundStyle(.secondary)
+                                    .accessibilityIdentifier("load-more-settled-threads")
+                                    .listRowInsets(
+                                        EdgeInsets(top: 10, leading: 8, bottom: 10, trailing: 8)
+                                    )
                                 }
                             }
                         }
@@ -223,6 +239,14 @@ struct ThreadListView: View {
         model.threads.filter(\.isSettled)
     }
 
+    private var displayedSettledThreads: [AgentThread] {
+        Array(settledThreads.prefix(settledDisplayLimit))
+    }
+
+    private var remainingSettledThreadCount: Int {
+        settledThreads.count - displayedSettledThreads.count
+    }
+
     private var settledThreadsAccordion: some View {
         Button {
             withAnimation(.easeInOut(duration: 0.15)) {
@@ -255,10 +279,12 @@ struct ThreadListView: View {
 
     private func deleteThreads(at offsets: IndexSet, from threads: [AgentThread]) {
         let ids = offsets.map { threads[$0].id }
+        for id in ids { workspaceStore.terminate(threadID: id) }
         Task { await model.deleteThreads(ids: ids) }
     }
 
     private func settle(_ thread: AgentThread) {
+        workspaceStore.terminate(threadID: thread.id)
         Task { await model.settle(threadID: thread.id) }
     }
 

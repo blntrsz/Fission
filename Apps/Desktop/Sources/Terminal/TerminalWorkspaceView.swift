@@ -22,12 +22,26 @@ final class ThreadWorkspaceStore {
         )
     }
 
+    func terminate(threadID: UUID) {
+        if let workspace = workspaces.first(where: { $0.threadID == threadID }) {
+            workspace.terminateAll()
+        } else {
+            let sessionIDs = TerminalWorkspacePersistence.load(threadID: threadID).map(\.id)
+            TerminalExecutionControl.terminate(sessionIDs: sessionIDs)
+            TerminalWorkspacePersistence.remove(threadID: threadID)
+        }
+        agentActivityModel.forget(threadID: threadID)
+    }
+
     func synchronize(threads: [AgentThread]) {
         let availableThreads = threads.filter { !$0.isSettled }
         let threadIDs = Set(availableThreads.map(\.id))
         let removedThreadIDs = workspaces
             .filter { !threadIDs.contains($0.threadID) }
             .map(\.threadID)
+        for workspace in workspaces where !threadIDs.contains(workspace.threadID) {
+            workspace.terminateAll()
+        }
         workspaces.removeAll { !threadIDs.contains($0.threadID) }
         for threadID in removedThreadIDs {
             agentActivityModel.forget(threadID: threadID)
@@ -59,7 +73,18 @@ final class TerminalTabsViewModel: Identifiable {
         threadTitle = thread.title
         workingDirectory = thread.workingDirectory
         self.agentActivityModel = agentActivityModel
-        addTab()
+
+        let restoredTabs = TerminalWorkspacePersistence.load(threadID: thread.id)
+        if restoredTabs.isEmpty {
+            addTab()
+        } else {
+            tabs = restoredTabs.map { record in
+                makeTab(id: record.id, number: record.number, title: record.title)
+            }
+            nextTabNumber = (restoredTabs.map(\.number).max() ?? 0) + 1
+            selectedTabID = restoredTabs.first(where: \.isSelected)?.id ?? tabs.first?.id
+            updateVisibility()
+        }
     }
 
     func update(thread: AgentThread) {
@@ -68,17 +93,8 @@ final class TerminalTabsViewModel: Identifiable {
     }
 
     func addTab() {
-        let tab = TerminalTab(
-            number: nextTabNumber,
-            threadID: threadID,
-            workingDirectory: workingDirectory,
-            agentActivityModel: agentActivityModel
-        )
+        let tab = makeTab(id: UUID(), number: nextTabNumber)
         nextTabNumber += 1
-        tab.state.onClose = { [weak self, weak tab] _ in
-            guard let tab else { return }
-            self?.close(tabID: tab.id)
-        }
         tabs.append(tab)
         select(tabID: tab.id)
     }
@@ -87,6 +103,7 @@ final class TerminalTabsViewModel: Identifiable {
         guard tabs.contains(where: { $0.id == tabID }) else { return }
         selectedTabID = tabID
         updateVisibility()
+        persist()
         tabs.first(where: { $0.id == tabID })?.state.requestFocus()
     }
 
@@ -107,7 +124,8 @@ final class TerminalTabsViewModel: Identifiable {
     func close(tabID: UUID) {
         guard let index = tabs.firstIndex(where: { $0.id == tabID }) else { return }
         let wasSelected = selectedTabID == tabID
-        tabs.remove(at: index)
+        let removedTab = tabs.remove(at: index)
+        removedTab.terminate()
         agentActivityModel.forget(threadID: threadID, tabID: tabID)
 
         if tabs.isEmpty {
@@ -116,7 +134,13 @@ final class TerminalTabsViewModel: Identifiable {
             select(tabID: tabs[min(index, tabs.count - 1)].id)
         } else {
             updateVisibility()
+            persist()
         }
+    }
+
+    func terminateAll() {
+        for tab in tabs { tab.terminate() }
+        TerminalWorkspacePersistence.remove(threadID: threadID)
     }
 
     func setWorkspaceVisible(_ visible: Bool) {
@@ -130,6 +154,37 @@ final class TerminalTabsViewModel: Identifiable {
             tab.state.isSurfaceVisible = tab.id == selectedTabID
         }
     }
+
+    private func makeTab(id: UUID, number: Int, title: String? = nil) -> TerminalTab {
+        let tab = TerminalTab(
+            id: id,
+            number: number,
+            title: title,
+            threadID: threadID,
+            workingDirectory: workingDirectory,
+            agentActivityModel: agentActivityModel,
+            didRename: { [weak self] in self?.persist() }
+        )
+        tab.state.onClose = { [weak self, weak tab] _ in
+            guard let tab else { return }
+            self?.close(tabID: tab.id)
+        }
+        return tab
+    }
+
+    private func persist() {
+        TerminalWorkspacePersistence.save(
+            tabs: tabs.enumerated().map { index, tab in
+                TerminalWorkspacePersistence.TabRecord(
+                    id: tab.id,
+                    number: index + 1,
+                    title: tab.title,
+                    isSelected: tab.id == selectedTabID
+                )
+            },
+            threadID: threadID
+        )
+    }
 }
 
 @MainActor
@@ -139,15 +194,30 @@ final class TerminalTab: Identifiable {
     private(set) var title: String
     let state: TerminalViewState
 
+    @ObservationIgnored private let persistentSession: PersistentTerminalSession
+    @ObservationIgnored private let didRename: () -> Void
+
     init(
+        id: UUID,
         number: Int,
+        title: String? = nil,
         threadID: UUID,
         workingDirectory: String?,
-        agentActivityModel: AgentActivityModel
+        agentActivityModel: AgentActivityModel,
+        didRename: @escaping () -> Void
     ) {
-        let id = UUID()
         self.id = id
-        title = "Tab \(number)"
+        self.title = title ?? "Tab \(number)"
+        self.didRename = didRename
+
+        let persistentSession = PersistentTerminalSession(
+            id: id,
+            threadID: threadID,
+            workingDirectory: workingDirectory,
+            environment: agentActivityModel.environment(threadID: threadID, tabID: id)
+        )
+        self.persistentSession = persistentSession
+
         state = TerminalViewState(
             configSource: GhosttyUserConfiguration.source,
             // Preserve colors from Ghostty's config instead of overlaying the
@@ -156,9 +226,7 @@ final class TerminalTab: Identifiable {
         )
         state.makePlatformView = { FissionTerminalView(frame: .zero) }
         state.configuration = TerminalSurfaceOptions(
-            backend: .exec,
-            workingDirectory: workingDirectory,
-            envVars: agentActivityModel.environment(threadID: threadID, tabID: id),
+            backend: .inMemory(persistentSession.renderer),
             context: .window,
             resizeThrottleMilliseconds: 16
         )
@@ -168,6 +236,40 @@ final class TerminalTab: Identifiable {
         let trimmedTitle = proposedTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedTitle.isEmpty else { return }
         title = trimmedTitle
+        didRename()
+    }
+
+    func terminate() {
+        persistentSession.terminate()
+    }
+}
+
+private enum TerminalWorkspacePersistence {
+    struct TabRecord: Codable {
+        let id: UUID
+        let number: Int
+        let title: String
+        let isSelected: Bool
+    }
+
+    static func load(threadID: UUID) -> [TabRecord] {
+        guard let data = UserDefaults.standard.data(forKey: key(threadID: threadID)) else {
+            return []
+        }
+        return (try? JSONDecoder().decode([TabRecord].self, from: data)) ?? []
+    }
+
+    static func save(tabs: [TabRecord], threadID: UUID) {
+        guard let data = try? JSONEncoder().encode(tabs) else { return }
+        UserDefaults.standard.set(data, forKey: key(threadID: threadID))
+    }
+
+    static func remove(threadID: UUID) {
+        UserDefaults.standard.removeObject(forKey: key(threadID: threadID))
+    }
+
+    private static func key(threadID: UUID) -> String {
+        "terminal-workspace.\(threadID.uuidString)"
     }
 }
 
