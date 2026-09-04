@@ -43,5 +43,24 @@ struct AgentActivityModelTests {
 
         #expect(events.count == 1)
         #expect(model.state(for: threadID) == .running)
+        #expect(model.states(for: threadID).count == 2)
+        #expect(model.states(for: threadID).contains(.running))
+        #expect(model.states(for: threadID).contains(.finished))
+    }
+
+    @Test func exposesAtMostTenAgentStates() {
+        let threadID = UUID()
+        let model = AgentActivityModel(installPiIntegration: false)
+
+        for sequence in 1 ... 12 {
+            model.record(
+                state: .running,
+                threadID: threadID,
+                tabID: UUID(),
+                sequence: Int64(sequence)
+            )
+        }
+
+        #expect(model.states(for: threadID).count == 10)
     }
 }

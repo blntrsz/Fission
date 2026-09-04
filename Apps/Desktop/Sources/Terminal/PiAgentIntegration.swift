@@ -63,6 +63,14 @@ final class AgentActivityModel {
         return .idle
     }
 
+    func states(for threadID: UUID) -> [AgentActivityState] {
+        guard threadsWithAgentRun.contains(threadID) else { return [] }
+        return (activities[threadID] ?? [:])
+            .sorted { $0.key.uuidString < $1.key.uuidString }
+            .prefix(10)
+            .map { $0.value.state }
+    }
+
     func acknowledgeFinished(threadID: UUID) {
         guard var threadActivities = activities[threadID] else { return }
         for tabID in threadActivities.keys where threadActivities[tabID]?.state == .finished {

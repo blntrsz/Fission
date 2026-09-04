@@ -95,10 +95,10 @@ struct ThreadListView: View {
             } else {
                 List(selection: selectedThreadBinding) {
                     ForEach(activeThreads) { thread in
-                        let activityState = agentActivityModel.state(for: thread.id)
+                        let activityStates = agentActivityModel.states(for: thread.id)
                         ThreadRow(
                             thread: thread,
-                            activityState: activityState,
+                            activityStates: activityStates,
                             isSelected: navigationModel.selectedThreadID == thread.id,
                             isRenaming: editingThreadID == thread.id,
                             renameTitle: $renameDraft,
@@ -120,10 +120,10 @@ struct ThreadListView: View {
 
                         if areSettledThreadsExpanded {
                             ForEach(settledThreads) { thread in
-                                let activityState = agentActivityModel.state(for: thread.id)
+                                let activityStates = agentActivityModel.states(for: thread.id)
                                 ThreadRow(
                                     thread: thread,
-                                    activityState: activityState,
+                                    activityStates: activityStates,
                                     isSelected: false,
                                     isRenaming: editingThreadID == thread.id,
                                     renameTitle: $renameDraft,
@@ -315,7 +315,7 @@ private extension ThreadListView {
 
 private struct ThreadRow: View {
     let thread: AgentThread
-    let activityState: AgentActivityState?
+    let activityStates: [AgentActivityState]
     let isSelected: Bool
     let isRenaming: Bool
     @Binding var renameTitle: String
@@ -373,8 +373,8 @@ private struct ThreadRow: View {
             HStack(spacing: 10) {
                 GitBranchLabel(workingDirectory: thread.workingDirectory)
                 Spacer(minLength: 0)
-                if let activityState {
-                    AgentActivityLabel(state: activityState)
+                if !activityStates.isEmpty {
+                    AgentActivityIndicators(states: activityStates)
                 }
             }
         }
@@ -439,47 +439,38 @@ private struct ThreadRow: View {
     }
 }
 
-private struct AgentActivityLabel: View {
-    let state: AgentActivityState
+private struct AgentActivityIndicators: View {
+    let states: [AgentActivityState]
 
     var body: some View {
         HStack(spacing: 4) {
-            if let title {
-                Text(title)
+            ForEach(Array(states.prefix(10).enumerated()), id: \.offset) { _, state in
+                Image(systemName: symbol(for: state))
+                    .foregroundStyle(color(for: state))
+                    .accessibilityLabel(accessibilityTitle(for: state))
             }
-            Image(systemName: symbol)
         }
         .font(.caption.weight(.medium))
-        .foregroundStyle(color)
-        .lineLimit(1)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Agent status: \(accessibilityTitle)")
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Agent statuses")
     }
 
-    private var title: String? {
+    private func accessibilityTitle(for state: AgentActivityState) -> String {
         switch state {
-        case .idle: "Idle"
-        case .running, .blocked: "Working"
-        case .finished: nil
+        case .idle: "Idle agent"
+        case .running, .blocked: "Working agent"
+        case .finished: "Finished agent"
         }
     }
 
-    private var accessibilityTitle: String {
-        switch state {
-        case .idle: "Idle"
-        case .running, .blocked: "Working"
-        case .finished: "Finished"
-        }
-    }
-
-    private var symbol: String {
+    private func symbol(for state: AgentActivityState) -> String {
         switch state {
         case .idle: "circle"
         case .running, .blocked, .finished: "circle.fill"
         }
     }
 
-    private var color: Color {
+    private func color(for state: AgentActivityState) -> Color {
         switch state {
         case .idle: .secondary
         case .running, .blocked: .white
