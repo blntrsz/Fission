@@ -3,6 +3,7 @@
 import FissionCore
 import SwiftUI
 
+// swiftlint:disable:next type_body_length
 struct ThreadListView: View {
     let model: ThreadListModel
     let agentActivityModel: AgentActivityModel
@@ -12,6 +13,7 @@ struct ThreadListView: View {
     @State private var editingThreadID: UUID?
     @State private var renameDraft = ""
     @State private var isCreatingThread = false
+    @State private var mostRecentlyCreatedThreadID: UUID?
     @State private var areSettledThreadsExpanded = true
     @State private var recentProjectPaths = RecentProjectPaths.load()
 
@@ -93,55 +95,62 @@ struct ThreadListView: View {
                     description: Text("Create a Thread to start a new agent workstream.")
                 )
             } else {
-                List(selection: selectedThreadBinding) {
-                    ForEach(activeThreads) { thread in
-                        let activityStates = agentActivityModel.states(for: thread.id)
-                        ThreadRow(
-                            thread: thread,
-                            activityStates: activityStates,
-                            isSelected: navigationModel.selectedThreadID == thread.id,
-                            isRenaming: editingThreadID == thread.id,
-                            renameTitle: $renameDraft,
-                            beginRenaming: { beginRenaming(thread) },
-                            commitRename: commitRename,
-                            cancelRename: cancelRename,
-                            settle: { settle(thread) },
-                            reopen: {}
-                        )
-                        .listRowInsets(threadRowInsets())
-                        .tag(thread.id)
-                    }
-                    .onDelete { offsets in
-                        deleteThreads(at: offsets, from: activeThreads)
-                    }
+                ScrollViewReader { proxy in
+                    List(selection: selectedThreadBinding) {
+                        ForEach(activeThreads) { thread in
+                            let activityStates = agentActivityModel.states(for: thread.id)
+                            ThreadRow(
+                                thread: thread,
+                                activityStates: activityStates,
+                                isSelected: navigationModel.selectedThreadID == thread.id,
+                                isRenaming: editingThreadID == thread.id,
+                                renameTitle: $renameDraft,
+                                beginRenaming: { beginRenaming(thread) },
+                                commitRename: commitRename,
+                                cancelRename: cancelRename,
+                                settle: { settle(thread) },
+                                reopen: {}
+                            )
+                            .listRowInsets(threadRowInsets())
+                            .tag(thread.id)
+                            .id(thread.id)
+                        }
+                        .onDelete { offsets in
+                            deleteThreads(at: offsets, from: activeThreads)
+                        }
 
-                    if !settledThreads.isEmpty {
-                        settledThreadsAccordion
+                        if !settledThreads.isEmpty {
+                            settledThreadsAccordion
 
-                        if areSettledThreadsExpanded {
-                            ForEach(settledThreads) { thread in
-                                let activityStates = agentActivityModel.states(for: thread.id)
-                                ThreadRow(
-                                    thread: thread,
-                                    activityStates: activityStates,
-                                    isSelected: false,
-                                    isRenaming: editingThreadID == thread.id,
-                                    renameTitle: $renameDraft,
-                                    beginRenaming: { beginRenaming(thread) },
-                                    commitRename: commitRename,
-                                    cancelRename: cancelRename,
-                                    settle: {},
-                                    reopen: { reopen(thread) }
-                                )
-                                .listRowInsets(threadRowInsets())
-                            }
-                            .onDelete { offsets in
-                                deleteThreads(at: offsets, from: settledThreads)
+                            if areSettledThreadsExpanded {
+                                ForEach(settledThreads) { thread in
+                                    let activityStates = agentActivityModel.states(for: thread.id)
+                                    ThreadRow(
+                                        thread: thread,
+                                        activityStates: activityStates,
+                                        isSelected: false,
+                                        isRenaming: editingThreadID == thread.id,
+                                        renameTitle: $renameDraft,
+                                        beginRenaming: { beginRenaming(thread) },
+                                        commitRename: commitRename,
+                                        cancelRename: cancelRename,
+                                        settle: {},
+                                        reopen: { reopen(thread) }
+                                    )
+                                    .listRowInsets(threadRowInsets())
+                                }
+                                .onDelete { offsets in
+                                    deleteThreads(at: offsets, from: settledThreads)
+                                }
                             }
                         }
                     }
+                    .listStyle(.sidebar)
+                    .onChange(of: mostRecentlyCreatedThreadID) { _, threadID in
+                        guard let threadID else { return }
+                        proxy.scrollTo(threadID, anchor: .top)
+                    }
                 }
-                .listStyle(.sidebar)
             }
         }
         .navigationTitle("Threads")
@@ -262,6 +271,7 @@ struct ThreadListView: View {
                 workingDirectory: directory.path,
                 createWorktree: createWorktree
             ) {
+                mostRecentlyCreatedThreadID = threadID
                 navigationModel.select(threadID: threadID)
             }
         }
