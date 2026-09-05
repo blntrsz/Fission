@@ -16,7 +16,9 @@ enum TerminalExecutionResponseKind: String, Codable, Sendable {
 }
 
 enum TerminalExecutionProtocol {
-    static let version = 1
+    // Version 2 prevents upgraded clients from reconnecting to helpers created
+    // before terminal children acquired a controlling PTY and foreground group.
+    static let version = 2
     static let replayByteLimit = 4 * 1_024 * 1_024
 
     struct Request: Codable, Sendable {

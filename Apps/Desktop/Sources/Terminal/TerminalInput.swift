@@ -65,19 +65,6 @@ enum TerminalLinkActivation {
     }
 }
 
-enum TerminalInterruptRouting {
-    static func shouldHandleDirectly(
-        eventType: NSEvent.EventType,
-        modifiers: NSEvent.ModifierFlags,
-        charactersIgnoringModifiers: String?
-    ) -> Bool {
-        let relevantModifiers = modifiers.intersection([.command, .shift, .option, .control])
-        return eventType == .keyDown
-            && relevantModifiers == .control
-            && charactersIgnoringModifiers?.lowercased() == "c"
-    }
-}
-
 @MainActor
 final class FissionTerminalView: AppTerminalView {
     private static let acceptedDropTypes: [NSPasteboard.PasteboardType] = [
@@ -101,21 +88,9 @@ final class FissionTerminalView: AppTerminalView {
     }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
-        guard window?.firstResponder === self else {
-            return super.performKeyEquivalent(with: event)
-        }
-        if TerminalInterruptRouting.shouldHandleDirectly(
-            eventType: event.type,
-            modifiers: event.modifierFlags,
-            charactersIgnoringModifiers: event.charactersIgnoringModifiers
-        ) {
-            // SwiftUI's command responder chain can consume Control-C before
-            // AppTerminalView receives keyDown. Route it through Ghostty's key
-            // path directly so shells and terminal applications always see it.
-            keyDown(with: event)
-            return true
-        }
-        if isPasteShortcut(event), pasteImage(from: .general) {
+        if window?.firstResponder === self,
+           isPasteShortcut(event),
+           pasteImage(from: .general) {
             return true
         }
         return super.performKeyEquivalent(with: event)
