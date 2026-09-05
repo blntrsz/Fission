@@ -1,13 +1,19 @@
 import XCTest
 
 final class FissionDesktopUITests: XCTestCase {
-    private struct TestContext {
+    struct TestContext {
         let app: XCUIApplication
         let root: URL
         let projectDirectory: URL
         let databaseURL: URL
-        let interruptReadyMarker: URL?
-        let interruptReceivedMarker: URL?
+        let fixtureFiles: FixtureFiles
+    }
+
+    struct FixtureFiles {
+        let interruptReady: URL?
+        let interruptReceived: URL?
+        let searchReady: URL?
+        let focusRestored: URL?
     }
 
     @MainActor
@@ -90,8 +96,8 @@ final class FissionDesktopUITests: XCTestCase {
             app.terminate()
             try? FileManager.default.removeItem(at: context.root)
         }
-        let readyMarker = try XCTUnwrap(context.interruptReadyMarker)
-        let interruptMarker = try XCTUnwrap(context.interruptReceivedMarker)
+        let readyMarker = try XCTUnwrap(context.fixtureFiles.interruptReady)
+        let interruptMarker = try XCTUnwrap(context.fixtureFiles.interruptReceived)
 
         XCTAssertTrue(app.staticTexts["Explore Fission"].waitForExistence(timeout: 10))
         app.buttons["new-thread-button"].click()
@@ -212,9 +218,12 @@ final class FissionDesktopUITests: XCTestCase {
     }
 }
 
-private extension FissionDesktopUITests {
+extension FissionDesktopUITests {
     @MainActor
-    private func launchIsolatedApp(withInterruptProbe: Bool = false) throws -> TestContext {
+    func launchIsolatedApp(
+        withInterruptProbe: Bool = false,
+        withSearchFixture: Bool = false
+    ) throws -> TestContext {
         let root = FileManager.default.temporaryDirectory
             .appending(path: "fission-ui-test-\(UUID().uuidString)", directoryHint: .isDirectory)
         let projectDirectory = root
@@ -224,16 +233,12 @@ private extension FissionDesktopUITests {
             withIntermediateDirectories: true
         )
 
-        let readyMarker = withInterruptProbe ? root.appending(path: "probe-ready") : nil
-        let interruptMarker = withInterruptProbe ? root.appending(path: "interrupt-received") : nil
-        let probeProfile = withInterruptProbe ? root.appending(path: ".zprofile") : nil
-        if let readyMarker, let interruptMarker, let probeProfile {
-            try """
-            trap 'printf interrupted > "\(interruptMarker.path)"' INT
-            printf ready > "\(readyMarker.path)"
-            while true; do sleep 1; done
-            """.write(to: probeProfile, atomically: true, encoding: .utf8)
-        }
+        let fixtureFiles = try prepareShellProfile(
+            root: root,
+            projectDirectory: projectDirectory,
+            withInterruptProbe: withInterruptProbe,
+            withSearchFixture: withSearchFixture
+        )
 
         let databaseURL = root.appending(path: "fission.sqlite")
         let app = XCUIApplication()
@@ -248,7 +253,7 @@ private extension FissionDesktopUITests {
             .appending(path: ".pi/agent", directoryHint: .isDirectory)
             .path
         app.launchEnvironment["FISSION_EXECUTION_EPHEMERAL"] = "1"
-        if withInterruptProbe {
+        if withInterruptProbe || withSearchFixture {
             app.launchEnvironment["SHELL"] = "/bin/zsh"
             app.launchEnvironment["ZDOTDIR"] = root.path
         }
@@ -259,18 +264,82 @@ private extension FissionDesktopUITests {
             root: root,
             projectDirectory: projectDirectory,
             databaseURL: databaseURL,
-            interruptReadyMarker: readyMarker,
-            interruptReceivedMarker: interruptMarker
+            fixtureFiles: fixtureFiles
+        )
+    }
+
+    private func prepareShellProfile(
+        root: URL,
+        projectDirectory: URL,
+        withInterruptProbe: Bool,
+        withSearchFixture: Bool
+    ) throws -> FixtureFiles {
+        let interruptReady = withInterruptProbe ? root.appending(path: "probe-ready") : nil
+        let interruptReceived = withInterruptProbe ? root.appending(path: "interrupt-received") : nil
+        let searchReady = withSearchFixture ? root.appending(path: "search-ready") : nil
+        let focusRestored = withSearchFixture ? root.appending(path: "focus-restored") : nil
+        let profile = root.appending(path: ".zprofile")
+
+        if let interruptReady, let interruptReceived {
+            try """
+            trap 'printf interrupted > "\(interruptReceived.path)"' INT
+            printf ready > "\(interruptReady.path)"
+            while true; do sleep 1; done
+            """.write(to: profile, atomically: true, encoding: .utf8)
+        } else if let searchReady {
+            try """
+            if [[ "$PWD" == "\(projectDirectory.path)" ]]; then
+              for index in {1..180}; do
+                if (( index == 5 || index == 90 || index == 175 )); then
+                  printf 'fixture %03d FISSION_NEEDLE\\n' "$index"
+                else
+                  printf 'fixture %03d ordinary output\\n' "$index"
+                fi
+              done
+              printf ready > "\(searchReady.path)"
+            fi
+            """.write(to: profile, atomically: true, encoding: .utf8)
+        }
+        return FixtureFiles(
+            interruptReady: interruptReady,
+            interruptReceived: interruptReceived,
+            searchReady: searchReady,
+            focusRestored: focusRestored
         )
     }
 
     @MainActor
-    private func waitUntilEnabled(_ element: XCUIElement) {
+    func waitUntilEnabled(_ element: XCUIElement) {
         expectation(for: NSPredicate(format: "enabled == true"), evaluatedWith: element)
         waitForExpectations(timeout: 5)
     }
 
-    private func waitForFile(at url: URL, timeout: TimeInterval) -> Bool {
+    func waitForElement(
+        _ element: XCUIElement,
+        labelEndingIn suffix: String? = nil,
+        labelDifferentFrom differentLabel: String? = nil,
+        labelEqualTo equalLabel: String? = nil,
+        timeout: TimeInterval
+    ) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            let label = displayedText(of: element)
+            if element.exists,
+               suffix.map(label.hasSuffix) ?? true,
+               differentLabel.map({ label != $0 }) ?? true,
+               equalLabel.map({ label == $0 }) ?? true {
+                return true
+            }
+            Thread.sleep(forTimeInterval: 0.05)
+        }
+        return false
+    }
+
+    func displayedText(of element: XCUIElement) -> String {
+        (element.value as? String) ?? element.label
+    }
+
+    func waitForFile(at url: URL, timeout: TimeInterval) -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
             if FileManager.default.fileExists(atPath: url.path) {

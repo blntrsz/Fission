@@ -15,7 +15,7 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/blntrsz/libghostty-spm.git",
       "state" : {
-        "revision" : "ccec48d8602483ab64105e96965bb20277d1487a"
+        "revision" : "b333ff03d3658981dcc52ba80879748357f47fb5"
       }
     },
     {

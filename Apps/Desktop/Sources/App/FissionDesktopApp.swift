@@ -10,6 +10,7 @@ final class TerminalTabsShortcutRequest {
     enum Action {
         case addTab
         case selectTab(Int)
+        case search(TerminalSearchCommand)
     }
 
     let action: Action
@@ -47,6 +48,16 @@ struct FissionDesktopApp: App {
             action = .selectTab(index)
         } else if modifiers == .command, event.keyCode == 17 {
             action = .addTab
+        } else if modifiers == .command, event.keyCode == 3 {
+            action = .search(.open)
+        } else if modifiers == .command, event.keyCode == 14 {
+            action = .search(.useSelection)
+        } else if modifiers == .command, event.keyCode == 5 {
+            action = .search(.next)
+        } else if modifiers == [.command, .shift], event.keyCode == 5 {
+            action = .search(.previous)
+        } else if modifiers == [.command, .shift], event.keyCode == 3 {
+            action = .search(.close)
         } else {
             action = nil
         }
@@ -122,6 +133,7 @@ struct TerminalTabsActions {
     let addTab: () -> Void
     let selectTab: (Int) -> Void
     let pasteImage: () -> Bool
+    let performSearch: (TerminalSearchCommand) -> Void
 }
 
 private struct TerminalTabsActionsKey: FocusedValueKey {
@@ -192,6 +204,42 @@ private struct AppKeyboardCommands: Commands {
                 sendAction(#selector(NSText.selectAll(_:)))
             }
             .keyboardShortcut("a", modifiers: .command)
+        }
+
+        CommandGroup(replacing: .textEditing) {
+            Menu("Find") {
+                Button("Find…") {
+                    terminalTabs?.performSearch(.open)
+                }
+                .keyboardShortcut("f", modifiers: .command)
+                .disabled(terminalTabs == nil)
+
+                Button("Find Next") {
+                    terminalTabs?.performSearch(.next)
+                }
+                .keyboardShortcut("g", modifiers: .command)
+                .disabled(terminalTabs == nil)
+
+                Button("Find Previous") {
+                    terminalTabs?.performSearch(.previous)
+                }
+                .keyboardShortcut("g", modifiers: [.command, .shift])
+                .disabled(terminalTabs == nil)
+
+                Button("Use Selection for Find") {
+                    terminalTabs?.performSearch(.useSelection)
+                }
+                .keyboardShortcut("e", modifiers: .command)
+                .disabled(terminalTabs == nil)
+
+                Divider()
+
+                Button("Hide Find Bar") {
+                    terminalTabs?.performSearch(.close)
+                }
+                .keyboardShortcut("f", modifiers: [.command, .shift])
+                .disabled(terminalTabs == nil)
+            }
         }
 
         CommandGroup(after: .newItem) {

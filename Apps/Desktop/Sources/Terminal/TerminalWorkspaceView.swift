@@ -104,7 +104,12 @@ final class TerminalTabsViewModel: Identifiable {
         selectedTabID = tabID
         updateVisibility()
         persist()
-        tabs.first(where: { $0.id == tabID })?.state.requestFocus()
+        guard let selectedTab = tabs.first(where: { $0.id == tabID }) else { return }
+        if selectedTab.search.isPresented {
+            selectedTab.search.requestFocus()
+        } else {
+            selectedTab.state.requestFocus()
+        }
     }
 
     func selectTab(at index: Int) {
@@ -112,8 +117,12 @@ final class TerminalTabsViewModel: Identifiable {
         select(tabID: tabs[index].id)
     }
 
+    func performSearch(_ command: TerminalSearchCommand) {
+        selectedTab?.search.perform(command)
+    }
+
     func pasteImageIntoFocusedTab() -> Bool {
-        guard let tab = tabs.first(where: { $0.id == selectedTabID }),
+        guard let tab = selectedTab,
               let view = tab.state.attachedPlatformView as? FissionTerminalView
         else {
             return false
@@ -147,6 +156,10 @@ final class TerminalTabsViewModel: Identifiable {
         for tab in tabs {
             tab.state.isSurfaceVisible = visible && tab.id == selectedTabID
         }
+    }
+
+    private var selectedTab: TerminalTab? {
+        tabs.first(where: { $0.id == selectedTabID })
     }
 
     private func updateVisibility() {
@@ -193,6 +206,7 @@ final class TerminalTab: Identifiable {
     nonisolated let id: UUID
     private(set) var title: String
     let state: TerminalViewState
+    let search: TerminalSearchState
 
     @ObservationIgnored private let persistentSession: PersistentTerminalSession
     @ObservationIgnored private let didRename: () -> Void
@@ -218,14 +232,29 @@ final class TerminalTab: Identifiable {
         )
         self.persistentSession = persistentSession
 
-        state = TerminalViewState(
+        let terminalState = TerminalViewState(
             configSource: GhosttyUserConfiguration.source,
             // Preserve colors from Ghostty's config instead of overlaying the
             // package's default Alabaster/Afterglow theme.
             theme: TerminalTheme()
         )
-        state.makePlatformView = { FissionTerminalView(frame: .zero) }
-        state.configuration = TerminalSurfaceOptions(
+        state = terminalState
+        search = TerminalSearchState(
+            performAction: { [weak terminalState] action in
+                terminalState?.performBindingAction(action.binding) ?? false
+            },
+            restoreTerminalFocus: { [weak terminalState] in
+                terminalState?.requestFocus()
+            }
+        )
+        terminalState.onSearchRequest = { [weak search] query in
+            search?.present(query: query)
+        }
+        terminalState.onSearchEndRequest = { [weak search] in
+            search?.dismissFromRenderer()
+        }
+        terminalState.makePlatformView = { FissionTerminalView(frame: .zero) }
+        terminalState.configuration = TerminalSurfaceOptions(
             backend: .inMemory(persistentSession.renderer),
             context: .window,
             resizeThrottleMilliseconds: 16
@@ -398,7 +427,6 @@ struct TerminalWorkspaceView: View {
             terminalStack
         }
         .background(Color(nsColor: .windowBackgroundColor))
-        .accessibilityIdentifier("terminal-workspace")
         .focusedSceneValue(
             \.terminalTabsActions,
             isVisible
@@ -406,7 +434,8 @@ struct TerminalWorkspaceView: View {
                     tabCount: model.tabs.count,
                     addTab: { model.addTab() },
                     selectTab: { model.selectTab(at: $0) },
-                    pasteImage: { model.pasteImageIntoFocusedTab() }
+                    pasteImage: { model.pasteImageIntoFocusedTab() },
+                    performSearch: { model.performSearch($0) }
                 )
                 : nil
         )
@@ -431,6 +460,9 @@ struct TerminalWorkspaceView: View {
             case let .selectTab(index) where model.tabs.indices.contains(index):
                 request.isHandled = true
                 model.selectTab(at: index)
+            case let .search(command):
+                request.isHandled = true
+                model.performSearch(command)
             case .selectTab:
                 break
             }
@@ -452,6 +484,7 @@ struct TerminalWorkspaceView: View {
                 }
                 .padding(.horizontal, 8)
             }
+            .accessibilityIdentifier("terminal-workspace")
 
             Button("New Terminal", systemImage: "plus") {
                 model.addTab()
@@ -472,6 +505,9 @@ struct TerminalWorkspaceView: View {
                 ZStack(alignment: .bottomLeading) {
                     TerminalSurfaceView(context: tab.state)
                     TerminalURLHoverBanner(state: tab.state)
+                    if model.selectedTabID == tab.id, tab.search.isPresented {
+                        TerminalSearchOverlay(search: tab.search, terminalState: tab.state)
+                    }
                 }
                 .opacity(model.selectedTabID == tab.id ? 1 : 0)
                 .allowsHitTesting(model.selectedTabID == tab.id)
