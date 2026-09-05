@@ -218,10 +218,15 @@ struct ThreadListView: View {
     }
 
     private func activityStates(for threadID: UUID) -> [AgentActivityState] {
-        agentActivityModel.activities(for: threadID)
-            .sorted { $0.key.uuidString < $1.key.uuidString }
-            .prefix(10)
-            .map(\.value)
+        guard let workspace = workspaceStore.workspaces.first(where: {
+            $0.threadID == threadID
+        }) else {
+            return []
+        }
+        return agentActivityModel.states(
+            for: threadID,
+            orderedBy: workspace.tabs.map(\.id)
+        )
     }
 
     private func updateAgentAttention(selectedThreadID: UUID?) {

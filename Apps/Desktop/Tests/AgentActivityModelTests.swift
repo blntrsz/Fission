@@ -1,3 +1,5 @@
+// swiftlint:disable file_length
+
 import FissionCore
 @testable import FissionDesktop
 import Foundation
@@ -92,6 +94,44 @@ struct AgentActivityModelTests {
             finishedTabID: .finished
         ])
         #expect(notifications.notifications.count == 1)
+    }
+
+    @Test func ordersActivitiesByTabOrderAndOmitsClosedTabs() async {
+        let source = StubAgentActivityReportSource()
+        let model = makeModel(source: source)
+        let threadID = UUID()
+        let firstTabID = UUID()
+        let secondTabID = UUID()
+        _ = model.environment(threadID: threadID, tabID: firstTabID)
+        _ = model.environment(threadID: threadID, tabID: secondTabID)
+
+        source.send(reportData(
+            token: source.token,
+            threadID: threadID,
+            tabID: firstTabID,
+            state: .running,
+            sequence: 1
+        ))
+        source.send(reportData(
+            token: source.token,
+            threadID: threadID,
+            tabID: secondTabID,
+            state: .finished,
+            sequence: 1
+        ))
+        await Task.yield()
+
+        #expect(model.states(
+            for: threadID,
+            orderedBy: [secondTabID, firstTabID]
+        ) == [.finished, .running])
+
+        model.forget(threadID: threadID, tabID: secondTabID)
+
+        #expect(model.states(
+            for: threadID,
+            orderedBy: [secondTabID, firstTabID]
+        ) == [.running])
     }
 
     @Test func selectedThreadImmediatelyAcknowledgesEveryFinishedTab() async {

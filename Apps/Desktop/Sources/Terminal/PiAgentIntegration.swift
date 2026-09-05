@@ -98,6 +98,11 @@ final class AgentActivityModel {
         return (activitiesByThread[threadID] ?? [:]).mapValues(\.state)
     }
 
+    func states(for threadID: UUID, orderedBy tabIDs: [UUID]) -> [AgentActivityState] {
+        let activities = activities(for: threadID)
+        return Array(tabIDs.compactMap { activities[$0] }.prefix(10))
+    }
+
     func updateAttention(selectedThreadID: UUID?, isAppActive: Bool) {
         self.selectedThreadID = selectedThreadID
         self.isAppActive = isAppActive
