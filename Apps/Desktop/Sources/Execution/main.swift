@@ -325,13 +325,16 @@ private final class TerminalExecutionDaemon {
         posix_spawnattr_setflags(&attributes, Int16(POSIX_SPAWN_SETSID))
 
         var processID: pid_t = 0
-        let arguments = [shell, "-l"]
+        // posix_spawn cannot run TIOCSCTTY between creating the new session and
+        // execing the shell. Re-enter this executable for that one child-only step.
+        let launcher = CommandLine.arguments[0]
+        let arguments = [launcher, "--terminal-child", shell]
         let environmentEntries = environment.map { "\($0.key)=\($0.value)" }
         let spawnResult = withCStringArray(arguments) { argumentPointers in
             withCStringArray(environmentEntries) { environmentPointers in
                 posix_spawn(
                     &processID,
-                    shell,
+                    launcher,
                     &actions,
                     &attributes,
                     argumentPointers,
@@ -596,7 +599,38 @@ private func withCStringArray<Result>(
     }
 }
 
+/// Completes PTY setup after `POSIX_SPAWN_SETSID`, then becomes the user's shell.
+private func runTerminalChild(shell: String) -> Never {
+    guard ioctl(STDIN_FILENO, TIOCSCTTY, 0) == 0 else {
+        FileHandle.standardError.write(
+            Data("FissionExecution: could not set the controlling terminal: \(currentPOSIXError())\n".utf8)
+        )
+        exit(EXIT_FAILURE)
+    }
+    guard tcsetpgrp(STDIN_FILENO, getpgrp()) == 0 else {
+        FileHandle.standardError.write(
+            Data("FissionExecution: could not set the foreground process group: \(currentPOSIXError())\n".utf8)
+        )
+        exit(EXIT_FAILURE)
+    }
+
+    signal(SIGPIPE, SIG_DFL)
+    let shellArguments = [shell, "-l"]
+    withCStringArray(shellArguments) { pointers in
+        execv(shell, pointers)
+    }
+    FileHandle.standardError.write(
+        Data("FissionExecution: could not execute \(shell): \(currentPOSIXError())\n".utf8)
+    )
+    exit(EXIT_FAILURE)
+}
+
 let arguments = CommandLine.arguments
+if let childIndex = arguments.firstIndex(of: "--terminal-child"),
+   arguments.indices.contains(childIndex + 1) {
+    runTerminalChild(shell: arguments[childIndex + 1])
+}
+
 let socketPath: String
 if let socketIndex = arguments.firstIndex(of: "--socket"),
    arguments.indices.contains(socketIndex + 1) {

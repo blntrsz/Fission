@@ -6,6 +6,8 @@ final class FissionDesktopUITests: XCTestCase {
         let root: URL
         let projectDirectory: URL
         let databaseURL: URL
+        let interruptReadyMarker: URL?
+        let interruptReceivedMarker: URL?
     }
 
     @MainActor
@@ -76,6 +78,47 @@ final class FissionDesktopUITests: XCTestCase {
         screenshot.name = "Created Thread Workspace"
         screenshot.lifetime = .keepAlways
         add(screenshot)
+    }
+
+    @MainActor
+    func testControlCInterruptsForegroundTerminalProcess() throws {
+        continueAfterFailure = false
+
+        let context = try launchIsolatedApp(withInterruptProbe: true)
+        let app = context.app
+        defer {
+            app.terminate()
+            try? FileManager.default.removeItem(at: context.root)
+        }
+        let readyMarker = try XCTUnwrap(context.interruptReadyMarker)
+        let interruptMarker = try XCTUnwrap(context.interruptReceivedMarker)
+
+        XCTAssertTrue(app.staticTexts["Explore Fission"].waitForExistence(timeout: 10))
+        app.buttons["new-thread-button"].click()
+
+        let projectPath = app.textFields["project-path-field"]
+        XCTAssertTrue(projectPath.waitForExistence(timeout: 5))
+        projectPath.click()
+        projectPath.typeText(context.projectDirectory.path)
+        let createButton = app.buttons["create-thread-button"]
+        waitUntilEnabled(createButton)
+        createButton.click()
+
+        let terminal = app.scrollViews["terminal-workspace"]
+        XCTAssertTrue(terminal.waitForExistence(timeout: 10))
+        XCTAssertTrue(
+            waitForFile(at: readyMarker, timeout: 10),
+            "The probe must be running before Control-C is sent."
+        )
+        // SwiftUI propagates the workspace identifier to its tab-bar scroll view.
+        // Click below that bar, inside the native terminal surface, to acquire focus.
+        terminal.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 5)).click()
+        terminal.typeKey("c", modifierFlags: .control)
+
+        XCTAssertTrue(
+            waitForFile(at: interruptMarker, timeout: 5),
+            "Control-C should deliver SIGINT to the terminal's foreground process."
+        )
     }
 
     @MainActor
@@ -167,9 +210,11 @@ final class FissionDesktopUITests: XCTestCase {
         screenshot.lifetime = .keepAlways
         add(screenshot)
     }
+}
 
+private extension FissionDesktopUITests {
     @MainActor
-    private func launchIsolatedApp() throws -> TestContext {
+    private func launchIsolatedApp(withInterruptProbe: Bool = false) throws -> TestContext {
         let root = FileManager.default.temporaryDirectory
             .appending(path: "fission-ui-test-\(UUID().uuidString)", directoryHint: .isDirectory)
         let projectDirectory = root
@@ -178,6 +223,17 @@ final class FissionDesktopUITests: XCTestCase {
             at: projectDirectory,
             withIntermediateDirectories: true
         )
+
+        let readyMarker = withInterruptProbe ? root.appending(path: "probe-ready") : nil
+        let interruptMarker = withInterruptProbe ? root.appending(path: "interrupt-received") : nil
+        let probeProfile = withInterruptProbe ? root.appending(path: ".zprofile") : nil
+        if let readyMarker, let interruptMarker, let probeProfile {
+            try """
+            trap 'printf interrupted > "\(interruptMarker.path)"' INT
+            printf ready > "\(readyMarker.path)"
+            while true; do sleep 1; done
+            """.write(to: probeProfile, atomically: true, encoding: .utf8)
+        }
 
         let databaseURL = root.appending(path: "fission.sqlite")
         let app = XCUIApplication()
@@ -192,13 +248,19 @@ final class FissionDesktopUITests: XCTestCase {
             .appending(path: ".pi/agent", directoryHint: .isDirectory)
             .path
         app.launchEnvironment["FISSION_EXECUTION_EPHEMERAL"] = "1"
+        if withInterruptProbe {
+            app.launchEnvironment["SHELL"] = "/bin/zsh"
+            app.launchEnvironment["ZDOTDIR"] = root.path
+        }
         app.launch()
 
         return TestContext(
             app: app,
             root: root,
             projectDirectory: projectDirectory,
-            databaseURL: databaseURL
+            databaseURL: databaseURL,
+            interruptReadyMarker: readyMarker,
+            interruptReceivedMarker: interruptMarker
         )
     }
 
@@ -206,6 +268,17 @@ final class FissionDesktopUITests: XCTestCase {
     private func waitUntilEnabled(_ element: XCUIElement) {
         expectation(for: NSPredicate(format: "enabled == true"), evaluatedWith: element)
         waitForExpectations(timeout: 5)
+    }
+
+    private func waitForFile(at url: URL, timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if FileManager.default.fileExists(atPath: url.path) {
+                return true
+            }
+            Thread.sleep(forTimeInterval: 0.05)
+        }
+        return false
     }
 
     private func seedThreads(
