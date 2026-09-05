@@ -24,6 +24,7 @@
 		A10000000000000000000015 /* DesktopNavigationModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000015 /* DesktopNavigationModel.swift */; };
 		A10000000000000000000016 /* NotificationSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000016 /* NotificationSettingsView.swift */; };
 		A10000000000000000000018 /* TerminalInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000018 /* TerminalInput.swift */; };
+		A10000000000000000000019 /* TerminalURLPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000019 /* TerminalURLPresentation.swift */; };
 		E10000000000000000000001 /* ApplicationUpdateController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E20000000000000000000001 /* ApplicationUpdateController.swift */; };
 		E10000000000000000000002 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = E90000000000000000000002 /* Sparkle */; };
 		D10000000000000000000001 /* TerminalExecutionProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = D20000000000000000000001 /* TerminalExecutionProtocol.swift */; };
@@ -82,6 +83,7 @@
 		A20000000000000000000016 /* NotificationSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationSettingsView.swift; sourceTree = "<group>"; };
 		A20000000000000000000017 /* TerminalURLHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalURLHandler.swift; sourceTree = "<group>"; };
 		A20000000000000000000018 /* TerminalInput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalInput.swift; sourceTree = "<group>"; };
+		A20000000000000000000019 /* TerminalURLPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalURLPresentation.swift; sourceTree = "<group>"; };
 		B20000000000000000000001 /* DesktopThreadCreatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesktopThreadCreatorTests.swift; sourceTree = "<group>"; };
 		B20000000000000000000005 /* TerminalURLHandlerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalURLHandlerTests.swift; sourceTree = "<group>"; };
 		B20000000000000000000002 /* FissionDesktopTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FissionDesktopTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -199,6 +201,7 @@
 				A20000000000000000000005 /* TerminalWorkspaceView.swift */,
 				A20000000000000000000012 /* PiAgentIntegration.swift */,
 				A20000000000000000000017 /* TerminalURLHandler.swift */,
+				A20000000000000000000019 /* TerminalURLPresentation.swift */,
 				A20000000000000000000018 /* TerminalInput.swift */,
 				D20000000000000000000001 /* TerminalExecutionProtocol.swift */,
 				D20000000000000000000002 /* TerminalExecutionClient.swift */,
@@ -428,6 +431,7 @@
 				A10000000000000000000015 /* DesktopNavigationModel.swift in Sources */,
 				A10000000000000000000016 /* NotificationSettingsView.swift in Sources */,
 				A10000000000000000000017 /* TerminalURLHandler.swift in Sources */,
+				A10000000000000000000019 /* TerminalURLPresentation.swift in Sources */,
 				A10000000000000000000018 /* TerminalInput.swift in Sources */,
 				D10000000000000000000001 /* TerminalExecutionProtocol.swift in Sources */,
 				D10000000000000000000002 /* TerminalExecutionClient.swift in Sources */,
@@ -713,7 +717,7 @@
 			repositoryURL = "https://github.com/blntrsz/libghostty-spm.git";
 			requirement = {
 				kind = revision;
-				revision = 53f451ea42493a3ee7d16e3779c3b7a2fb0058d9;
+				revision = ccec48d8602483ab64105e96965bb20277d1487a;
 			};
 		};
 		E90000000000000000000001 /* XCRemoteSwiftPackageReference "Sparkle" */ = {

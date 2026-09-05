@@ -469,10 +469,13 @@ struct TerminalWorkspaceView: View {
     private var terminalStack: some View {
         ZStack {
             ForEach(model.tabs) { tab in
-                TerminalSurfaceView(context: tab.state)
-                    .opacity(model.selectedTabID == tab.id ? 1 : 0)
-                    .allowsHitTesting(model.selectedTabID == tab.id)
-                    .accessibilityHidden(model.selectedTabID != tab.id)
+                ZStack(alignment: .bottomLeading) {
+                    TerminalSurfaceView(context: tab.state)
+                    TerminalURLHoverBanner(state: tab.state)
+                }
+                .opacity(model.selectedTabID == tab.id ? 1 : 0)
+                .allowsHitTesting(model.selectedTabID == tab.id)
+                .accessibilityHidden(model.selectedTabID != tab.id)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
