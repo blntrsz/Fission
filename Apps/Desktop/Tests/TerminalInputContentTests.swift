@@ -50,6 +50,24 @@ struct TerminalInputContentTests {
         #expect(TerminalInputContent.text(urls: [], string: "") == nil)
     }
 
+    @Test func routesBareControlCDirectlyToTheTerminal() {
+        #expect(TerminalInterruptRouting.shouldHandleDirectly(
+            eventType: .keyDown,
+            modifiers: [.control, .capsLock],
+            charactersIgnoringModifiers: "c"
+        ))
+        #expect(!TerminalInterruptRouting.shouldHandleDirectly(
+            eventType: .keyDown,
+            modifiers: [.control, .shift],
+            charactersIgnoringModifiers: "c"
+        ))
+        #expect(!TerminalInterruptRouting.shouldHandleDirectly(
+            eventType: .keyUp,
+            modifiers: .control,
+            charactersIgnoringModifiers: "c"
+        ))
+    }
+
     @MainActor
     @Test func hiddenTerminalDoesNotRemainADragDestination() {
         let view = FissionTerminalView(frame: .zero)

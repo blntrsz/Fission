@@ -1,3 +1,5 @@
+// swiftlint:disable file_length
+
 import XCTest
 
 final class FissionDesktopUITests: XCTestCase {
@@ -84,6 +86,43 @@ final class FissionDesktopUITests: XCTestCase {
         screenshot.name = "Created Thread Workspace"
         screenshot.lifetime = .keepAlways
         add(screenshot)
+    }
+
+    @MainActor
+    func testControlCClearsPendingTerminalInput() throws {
+        continueAfterFailure = false
+
+        let context = try launchIsolatedApp()
+        let app = context.app
+        let clearedMarker = context.root.appending(path: "pending-input-cleared")
+        defer {
+            app.terminate()
+            try? FileManager.default.removeItem(at: context.root)
+        }
+
+        XCTAssertTrue(app.staticTexts["Explore Fission"].waitForExistence(timeout: 10))
+        app.buttons["new-thread-button"].click()
+
+        let projectPath = app.textFields["project-path-field"]
+        XCTAssertTrue(projectPath.waitForExistence(timeout: 5))
+        projectPath.click()
+        projectPath.typeText(context.projectDirectory.path)
+        let createButton = app.buttons["create-thread-button"]
+        waitUntilEnabled(createButton)
+        createButton.click()
+
+        let terminal = app.scrollViews["terminal-workspace"]
+        XCTAssertTrue(terminal.waitForExistence(timeout: 10))
+        terminal.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 5)).click()
+        terminal.typeText("asd")
+        terminal.typeKey("c", modifierFlags: .control)
+        terminal.typeText("printf cleared > \(clearedMarker.path)")
+        terminal.typeKey(XCUIKeyboardKey.return, modifierFlags: [])
+
+        XCTAssertTrue(
+            waitForFile(at: clearedMarker, timeout: 5),
+            "Control-C should clear pending input before the next command."
+        )
     }
 
     @MainActor
