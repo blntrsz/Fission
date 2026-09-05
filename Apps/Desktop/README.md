@@ -71,6 +71,35 @@ mise run desktop:package
 
 The resulting disk image is written to `dist/Fission.dmg`.
 
-Every push to `main` also runs `.github/workflows/release-desktop.yml`. It creates a `desktop-<run number>` GitHub release containing the DMG and its SHA-256 checksum. A failed workflow can be rerun safely without creating a duplicate release.
+Local packages use an ad-hoc signature and do not start the updater. Official builds are produced by `.github/workflows/release-desktop.yml` on every push to `main`. The workflow:
 
-The default and automated builds use an ad-hoc signature, which is suitable for local installation. Distribution to other users without Gatekeeper warnings requires signing with a Developer ID Application certificate and notarizing the disk image through Apple.
+1. Developer ID-signs the app, execution helper, and Sparkle components.
+2. Notarizes and staples both the app and DMG.
+3. EdDSA-signs the DMG and generates `appcast.xml`.
+4. Uploads all artifacts to a draft `desktop-<run number>` GitHub release.
+5. Verifies the staged assets before publishing the release as `latest`.
+
+Official builds check this stable Sparkle feed automatically:
+
+```text
+https://github.com/blntrsz/Fission/releases/latest/download/appcast.xml
+```
+
+Users can also choose **Fission → Check for Updates…**. Sparkle verifies the appcast signature before installing and relaunching the application. Active terminal sessions remain owned by the existing `FissionExecution` helper during a GUI relaunch; helper-version handoff is tracked separately and automatic download/install-on-quit should not be enabled until that lifecycle is implemented.
+
+### Release secrets
+
+Configure these GitHub Actions secrets before enabling the release workflow:
+
+| Secret | Value |
+|---|---|
+| `MACOS_CERTIFICATE_P12` | Base64-encoded Developer ID Application `.p12` |
+| `MACOS_CERTIFICATE_PASSWORD` | Password protecting the `.p12` |
+| `MACOS_KEYCHAIN_PASSWORD` | Random password for the temporary CI keychain |
+| `APPLE_ID` | Apple ID used by `notarytool` |
+| `APPLE_APP_PASSWORD` | App-specific password for that Apple ID |
+| `APPLE_TEAM_ID` | Apple Developer team identifier |
+| `SPARKLE_PRIVATE_KEY` | Private EdDSA key consumed by Sparkle's `sign_update` |
+| `SPARKLE_PUBLIC_KEY` | Matching public key embedded in official builds |
+
+Generate the Sparkle key pair once with Sparkle's `generate_keys` utility, back up the private key securely, and never commit it. Rotating this key requires a signed transition release; losing it prevents existing installations from trusting subsequent updates.

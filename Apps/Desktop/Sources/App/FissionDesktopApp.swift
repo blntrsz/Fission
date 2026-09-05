@@ -26,6 +26,7 @@ struct FissionDesktopApp: App {
     @State private var agentActivityModel: AgentActivityModel
     @State private var navigationModel: DesktopNavigationModel
     private let notificationCoordinator: AgentTaskNotificationCoordinator
+    private let updateController: ApplicationUpdateController
 
     private static var databasePath: String {
         #if DEBUG
@@ -69,6 +70,7 @@ struct FissionDesktopApp: App {
             notificationAdapter: notificationCoordinator
         ))
         self.notificationCoordinator = notificationCoordinator
+        self.updateController = ApplicationUpdateController()
         _ = Self.terminalTabsShortcutMonitor
     }
 
@@ -98,7 +100,7 @@ struct FissionDesktopApp: App {
             .frame(minWidth: 900, minHeight: 560)
         }
         .commands {
-            AppKeyboardCommands()
+            AppKeyboardCommands(updateController: updateController)
         }
 
         Settings {
@@ -144,11 +146,19 @@ extension FocusedValues {
 }
 
 private struct AppKeyboardCommands: Commands {
+    let updateController: ApplicationUpdateController
+
     @FocusedValue(\.toggleSidebarAction) private var toggleSidebar
     @FocusedValue(\.renameThreadAction) private var renameThread
     @FocusedValue(\.terminalTabsActions) private var terminalTabs
 
     var body: some Commands {
+        CommandGroup(after: .appInfo) {
+            Button("Check for Updates…") {
+                updateController.checkForUpdates()
+            }
+        }
+
         CommandGroup(replacing: .pasteboard) {
             Button("Cut") {
                 sendAction(#selector(NSText.cut(_:)))

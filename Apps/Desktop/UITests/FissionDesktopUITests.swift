@@ -9,6 +9,29 @@ final class FissionDesktopUITests: XCTestCase {
     }
 
     @MainActor
+    func testCheckForUpdatesIsAvailableFromApplicationMenu() throws {
+        continueAfterFailure = false
+
+        let context = try launchIsolatedApp()
+        let app = context.app
+        defer {
+            app.terminate()
+            try? FileManager.default.removeItem(at: context.root)
+        }
+
+        XCTAssertTrue(app.staticTexts["Explore Fission"].waitForExistence(timeout: 10))
+        app.menuBars.menuBarItems["FissionDev"].click()
+        let checkForUpdates = app.menuItems["Check for Updates…"]
+        XCTAssertTrue(checkForUpdates.waitForExistence(timeout: 5))
+        checkForUpdates.click()
+
+        XCTAssertTrue(
+            app.staticTexts["Updates are unavailable in this build"].waitForExistence(timeout: 5),
+            "Development builds should explain why they cannot contact the production feed."
+        )
+    }
+
+    @MainActor
     func testUserCanCreateThreadFromFreshState() throws {
         continueAfterFailure = false
 

@@ -13,11 +13,14 @@ concurrency:
   group: release-desktop-main
   cancel-in-progress: false
 
+env:
+  UPDATE_FEED_URL: https://github.com/blntrsz/Fission/releases/latest/download/appcast.xml
+
 jobs:
   release:
     if: github.ref == 'refs/heads/main'
     runs-on: macos-15
-    timeout-minutes: 45
+    timeout-minutes: 60
 
     steps:
       - name: Check out repository
@@ -28,6 +31,59 @@ jobs:
       - name: Select Xcode 26.3
         run: sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
 
+      - name: Verify release secrets
+        env:
+          CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.MACOS_KEYCHAIN_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+          SPARKLE_PUBLIC_KEY: ${{ secrets.SPARKLE_PUBLIC_KEY }}
+        run: |
+          : "${CERTIFICATE_P12:?Missing MACOS_CERTIFICATE_P12}"
+          : "${CERTIFICATE_PASSWORD:?Missing MACOS_CERTIFICATE_PASSWORD}"
+          : "${KEYCHAIN_PASSWORD:?Missing MACOS_KEYCHAIN_PASSWORD}"
+          : "${APPLE_ID:?Missing APPLE_ID}"
+          : "${APPLE_APP_PASSWORD:?Missing APPLE_APP_PASSWORD}"
+          : "${APPLE_TEAM_ID:?Missing APPLE_TEAM_ID}"
+          : "${SPARKLE_PRIVATE_KEY:?Missing SPARKLE_PRIVATE_KEY}"
+          : "${SPARKLE_PUBLIC_KEY:?Missing SPARKLE_PUBLIC_KEY}"
+
+      - name: Import Developer ID certificate
+        env:
+          CERTIFICATE_P12: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.MACOS_KEYCHAIN_PASSWORD }}
+        run: |
+          keychain="$RUNNER_TEMP/fission-signing.keychain-db"
+          certificate="$RUNNER_TEMP/developer-id.p12"
+          printf '%s' "$CERTIFICATE_P12" | base64 --decode > "$certificate"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$keychain"
+          security import "$certificate" -k "$keychain" -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$keychain"
+          security list-keychains -d user -s "$keychain" login.keychain-db
+          identity="$(security find-identity -v -p codesigning "$keychain" | awk '/Developer ID Application/ {print $2; exit}')"
+          test -n "$identity"
+          echo "FISSION_CODE_SIGN_IDENTITY=$identity" >> "$GITHUB_ENV"
+          rm -f "$certificate"
+
+      - name: Configure notarization credentials
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          KEYCHAIN_PASSWORD: ${{ secrets.MACOS_KEYCHAIN_PASSWORD }}
+        run: |
+          xcrun notarytool store-credentials fission-notary \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --keychain "$RUNNER_TEMP/fission-signing.keychain-db"
+
       - name: Verify macOS 26 SDK
         run: |
           xcodebuild -version
@@ -35,40 +91,79 @@ jobs:
           echo "macOS SDK $sdk_version"
           test "${sdk_version%%.*}" -ge 26
 
-      - name: Build DMG
+      - name: Build, sign, and notarize DMG
         env:
           FISSION_BUILD_NUMBER: ${{ github.run_number }}
+          FISSION_MARKETING_VERSION: 0.1.${{ github.run_number }}
+          FISSION_UPDATE_FEED_URL: ${{ env.UPDATE_FEED_URL }}
+          FISSION_SPARKLE_PUBLIC_KEY: ${{ secrets.SPARKLE_PUBLIC_KEY }}
+          FISSION_DEVELOPMENT_TEAM: ${{ secrets.APPLE_TEAM_ID }}
+          FISSION_NOTARY_PROFILE: fission-notary
+          FISSION_NOTARY_KEYCHAIN: ${{ runner.temp }}/fission-signing.keychain-db
         run: ./scripts/package-desktop.sh
 
-      - name: Verify release artifact
+      - name: Sign update and generate appcast
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+          RELEASE_TAG: desktop-${{ github.run_number }}
         run: |
-          hdiutil verify dist/Fission.dmg
+          signing_key="$RUNNER_TEMP/sparkle-private-key"
+          printf '%s' "$SPARKLE_PRIVATE_KEY" > "$signing_key"
+          chmod 600 "$signing_key"
+          sign_update="$(find Apps/Desktop/.derivedData/SourcePackages/artifacts -type f -name sign_update -perm -111 | head -1)"
+          test -n "$sign_update"
+          "$sign_update" -f "$signing_key" dist/Fission.dmg > dist/sign_update.txt
+          rm -f "$signing_key"
+          python3 scripts/generate-appcast.py \
+            --signature dist/sign_update.txt \
+            --output dist/appcast.xml \
+            --build "${{ github.run_number }}" \
+            --version "0.1.${{ github.run_number }}" \
+            --commit "$GITHUB_SHA" \
+            --tag "$RELEASE_TAG"
           shasum -a 256 dist/Fission.dmg > dist/Fission.dmg.sha256
+          python3 -c 'import xml.etree.ElementTree as ET; ET.parse("dist/appcast.xml")'
 
-      - name: Publish GitHub release
+      - name: Stage immutable GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: desktop-${{ github.run_number }}
         run: |
-          title="Fission Desktop build ${{ github.run_number }}"
-          notes="Automated desktop build of commit ${GITHUB_SHA}."
+          title="Fission Desktop 0.1.${{ github.run_number }}"
+          notes="Automated signed and notarized desktop build of commit ${GITHUB_SHA}."
 
-          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
-            gh release edit "$RELEASE_TAG" \
-              --target "$GITHUB_SHA" \
-              --title "$title" \
-              --notes "$notes" \
-              --latest
+          if gh release view "$RELEASE_TAG" --json isDraft >/dev/null 2>&1; then
+            test "$(gh release view "$RELEASE_TAG" --json isDraft --jq .isDraft)" = true
             gh release upload "$RELEASE_TAG" \
               dist/Fission.dmg \
               dist/Fission.dmg.sha256 \
+              dist/appcast.xml \
               --clobber
           else
             gh release create "$RELEASE_TAG" \
               dist/Fission.dmg \
               dist/Fission.dmg.sha256 \
+              dist/appcast.xml \
               --target "$GITHUB_SHA" \
               --title "$title" \
               --notes "$notes" \
-              --latest
+              --draft
           fi
+
+      - name: Verify staged assets and publish update feed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: desktop-${{ github.run_number }}
+        run: |
+          python3 - <<'PY'
+          import json, os, subprocess
+          assets = json.loads(subprocess.check_output([
+              "gh", "release", "view", os.environ["RELEASE_TAG"],
+              "--json", "assets", "--jq", ".assets",
+          ]))
+          remote = {asset["name"]: asset["size"] for asset in assets}
+          for path in ("dist/Fission.dmg", "dist/Fission.dmg.sha256", "dist/appcast.xml"):
+              name = os.path.basename(path)
+              assert remote.get(name) == os.path.getsize(path), (name, remote.get(name), os.path.getsize(path))
+          PY
+          gh release edit "$RELEASE_TAG" --draft=false --latest
