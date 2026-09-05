@@ -3,6 +3,14 @@ import AppKit
 import Foundation
 import Testing
 
+private final class UnavailablePasteboardDataProvider: NSObject, NSPasteboardItemDataProvider {
+    func pasteboard(
+        _ pasteboard: NSPasteboard?,
+        item: NSPasteboardItem,
+        provideDataForType type: NSPasteboard.PasteboardType
+    ) {}
+}
+
 struct TerminalInputContentTests {
     @Test func commandShiftClickRemovesOnlyShiftForGhosttyLinkActivation() {
         let modifiers: NSEvent.ModifierFlags = [.command, .shift, .option, .capsLock]
@@ -40,6 +48,23 @@ struct TerminalInputContentTests {
     @Test func fallsBackToPlainText() {
         #expect(TerminalInputContent.text(urls: [], string: "hello") == "hello")
         #expect(TerminalInputContent.text(urls: [], string: "") == nil)
+    }
+
+    @MainActor
+    @Test func acceptsAdvertisedFileURLBeforeItsPayloadIsReadable() {
+        let pasteboard = NSPasteboard(name: NSPasteboard.Name(UUID().uuidString))
+        defer { pasteboard.releaseGlobally() }
+        pasteboard.clearContents()
+
+        let provider = UnavailablePasteboardDataProvider()
+        let item = NSPasteboardItem()
+        item.setDataProvider(provider, forTypes: [.fileURL])
+        pasteboard.writeObjects([item])
+
+        #expect(pasteboard.types?.contains(.fileURL) == true)
+        #expect(TerminalInputContent.text(from: pasteboard) == nil)
+        #expect(PasteboardImage(from: pasteboard) == nil)
+        #expect(FissionTerminalView.canPaste(from: pasteboard))
     }
 
     @Test func readsFileURLsFromPasteboardBeforeDisplayNames() {

@@ -100,15 +100,15 @@ final class FissionTerminalView: AppTerminalView {
     }
 
     override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
-        canPaste(from: sender.draggingPasteboard) ? .copy : []
+        Self.canPaste(from: sender.draggingPasteboard) ? .copy : []
     }
 
     override func draggingUpdated(_ sender: any NSDraggingInfo) -> NSDragOperation {
-        canPaste(from: sender.draggingPasteboard) ? .copy : []
+        Self.canPaste(from: sender.draggingPasteboard) ? .copy : []
     }
 
     override func prepareForDragOperation(_ sender: any NSDraggingInfo) -> Bool {
-        canPaste(from: sender.draggingPasteboard)
+        Self.canPaste(from: sender.draggingPasteboard)
     }
 
     override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
@@ -130,8 +130,11 @@ final class FissionTerminalView: AppTerminalView {
             && event.charactersIgnoringModifiers?.lowercased() == "v"
     }
 
-    private func canPaste(from pasteboard: NSPasteboard) -> Bool {
-        TerminalInputContent.text(from: pasteboard) != nil || PasteboardImage(from: pasteboard) != nil
+    static func canPaste(from pasteboard: NSPasteboard) -> Bool {
+        // Drag payloads such as macOS screenshot thumbnails may be lazy. Match
+        // Ghostty by deciding from advertised types and reading data only on drop.
+        guard let types = pasteboard.types else { return false }
+        return !Set(types).isDisjoint(with: Set(acceptedDropTypes))
     }
 
     private func pasteDroppedContent(from pasteboard: NSPasteboard) -> Bool {
