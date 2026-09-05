@@ -78,6 +78,15 @@ final class FissionTerminalView: AppTerminalView {
         registerForDraggedTypes(Self.acceptedDropTypes)
     }
 
+    override func setSurfaceVisible(_ visible: Bool) {
+        super.setSurfaceVisible(visible)
+        if visible {
+            registerForDraggedTypes(Self.acceptedDropTypes)
+        } else {
+            unregisterDraggedTypes()
+        }
+    }
+
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         if window?.firstResponder === self,
            isPasteShortcut(event),

@@ -51,6 +51,18 @@ struct TerminalInputContentTests {
     }
 
     @MainActor
+    @Test func hiddenTerminalDoesNotRemainADragDestination() {
+        let view = FissionTerminalView(frame: .zero)
+        #expect(view.registeredDraggedTypes.contains(.fileURL))
+
+        view.setSurfaceVisible(false)
+        #expect(view.registeredDraggedTypes.isEmpty)
+
+        view.setSurfaceVisible(true)
+        #expect(view.registeredDraggedTypes.contains(.fileURL))
+    }
+
+    @MainActor
     @Test func acceptsAdvertisedFileURLBeforeItsPayloadIsReadable() {
         let pasteboard = NSPasteboard(name: NSPasteboard.Name(UUID().uuidString))
         defer { pasteboard.releaseGlobally() }
