@@ -71,15 +71,16 @@ mise run desktop:package
 
 The resulting disk image is written to `dist/Fission.dmg`.
 
-Local packages use an ad-hoc signature and do not start the updater. Official builds are produced by `.github/workflows/release-desktop.yml` on every push to `main`. The workflow:
+Local packages use an ad-hoc signature and do not start the updater. Update-enabled builds are produced by `.github/workflows/release-desktop.yml` on every push to `main`. The workflow:
 
-1. Developer ID-signs the app, execution helper, and Sparkle components.
-2. Notarizes and staples both the app and DMG.
-3. EdDSA-signs the DMG and generates `appcast.xml`.
-4. Uploads all artifacts to a draft `desktop-<run number>` GitHub release.
-5. Verifies the staged assets before publishing the release as `latest`.
+1. Builds an ad-hoc signed app and DMG without Apple credentials.
+2. EdDSA-signs the DMG and generates `appcast.xml`.
+3. Uploads all artifacts to a draft `desktop-<run number>` GitHub release.
+4. Verifies the staged assets before publishing the release as `latest`.
 
-Official builds check this stable Sparkle feed automatically:
+These builds are not Developer ID-signed or notarized. On first launch, macOS users may need to allow Fission from **System Settings → Privacy & Security → Open Anyway**.
+
+Update-enabled builds check this stable Sparkle feed automatically:
 
 ```text
 https://github.com/blntrsz/Fission/releases/latest/download/appcast.xml
@@ -93,13 +94,7 @@ Configure these GitHub Actions secrets before enabling the release workflow:
 
 | Secret | Value |
 |---|---|
-| `MACOS_CERTIFICATE_P12` | Base64-encoded Developer ID Application `.p12` |
-| `MACOS_CERTIFICATE_PASSWORD` | Password protecting the `.p12` |
-| `MACOS_KEYCHAIN_PASSWORD` | Random password for the temporary CI keychain |
-| `APPLE_ID` | Apple ID used by `notarytool` |
-| `APPLE_APP_PASSWORD` | App-specific password for that Apple ID |
-| `APPLE_TEAM_ID` | Apple Developer team identifier |
 | `SPARKLE_PRIVATE_KEY` | Private EdDSA key consumed by Sparkle's `sign_update` |
-| `SPARKLE_PUBLIC_KEY` | Matching public key embedded in official builds |
+| `SPARKLE_PUBLIC_KEY` | Matching public key embedded in update-enabled builds |
 
 Generate the Sparkle key pair once with Sparkle's `generate_keys` utility, back up the private key securely, and never commit it. Rotating this key requires a signed transition release; losing it prevents existing installations from trusting subsequent updates.
