@@ -8,36 +8,40 @@ DMG_ROOT="$DIST_DIR/.dmg-root"
 DMG_PATH="$DIST_DIR/Fission.dmg"
 NOTARIZATION_ZIP="$DIST_DIR/Fission.app.zip"
 
-build_settings=()
+xcodebuild_args=(
+  -project Apps/Desktop/FissionDesktop.xcodeproj
+  -scheme FissionDesktop
+  -configuration Release
+  -destination 'generic/platform=macOS'
+  -derivedDataPath "$DERIVED_DATA"
+)
 if [[ -n "${FISSION_BUILD_NUMBER:-}" ]]; then
-  build_settings+=("CURRENT_PROJECT_VERSION=$FISSION_BUILD_NUMBER")
+  xcodebuild_args+=("CURRENT_PROJECT_VERSION=$FISSION_BUILD_NUMBER")
 fi
 if [[ -n "${FISSION_MARKETING_VERSION:-}" ]]; then
-  build_settings+=("MARKETING_VERSION=$FISSION_MARKETING_VERSION")
+  xcodebuild_args+=("MARKETING_VERSION=$FISSION_MARKETING_VERSION")
 fi
 if [[ -n "${FISSION_UPDATE_FEED_URL:-}" ]]; then
-  build_settings+=("FISSION_UPDATE_FEED_URL=$FISSION_UPDATE_FEED_URL")
+  xcodebuild_args+=("FISSION_UPDATE_FEED_URL=$FISSION_UPDATE_FEED_URL")
 fi
 if [[ -n "${FISSION_SPARKLE_PUBLIC_KEY:-}" ]]; then
-  build_settings+=("FISSION_SPARKLE_PUBLIC_KEY=$FISSION_SPARKLE_PUBLIC_KEY")
+  xcodebuild_args+=("FISSION_SPARKLE_PUBLIC_KEY=$FISSION_SPARKLE_PUBLIC_KEY")
 fi
 if [[ -n "${FISSION_CODE_SIGN_IDENTITY:-}" ]]; then
   : "${FISSION_DEVELOPMENT_TEAM:?FISSION_DEVELOPMENT_TEAM is required for signed builds}"
-  build_settings+=(
+  xcodebuild_args+=(
     "CODE_SIGN_STYLE=Manual"
     "CODE_SIGN_IDENTITY=$FISSION_CODE_SIGN_IDENTITY"
     "DEVELOPMENT_TEAM=$FISSION_DEVELOPMENT_TEAM"
   )
+else
+  # Ad-hoc signatures have no shared Team ID, so hardened runtime library
+  # validation would reject Sparkle's separately signed framework at launch.
+  xcodebuild_args+=("ENABLE_HARDENED_RUNTIME=NO")
 fi
 
-xcodebuild \
-  -project Apps/Desktop/FissionDesktop.xcodeproj \
-  -scheme FissionDesktop \
-  -configuration Release \
-  -destination 'generic/platform=macOS' \
-  -derivedDataPath "$DERIVED_DATA" \
-  "${build_settings[@]}" \
-  build
+xcodebuild "${xcodebuild_args[@]}" build
+./scripts/verify-desktop-bundle.sh "$APP_PATH"
 
 if [[ -n "${FISSION_UPDATE_FEED_URL:-}" || -n "${FISSION_SPARKLE_PUBLIC_KEY:-}" ]]; then
   : "${FISSION_UPDATE_FEED_URL:?FISSION_UPDATE_FEED_URL is required for update-enabled builds}"
