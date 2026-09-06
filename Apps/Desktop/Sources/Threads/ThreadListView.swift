@@ -14,6 +14,7 @@ struct ThreadListView: View {
     @State private var editingThreadID: UUID?
     @State private var renameDraft = ""
     @State private var isCreatingThread = false
+    @State private var isSwitchingThread = false
     @State private var mostRecentlyCreatedThreadID: UUID?
     @State private var areSettledThreadsExpanded = true
     @State private var settledDisplayLimit = 20
@@ -41,6 +42,7 @@ struct ThreadListView: View {
         }
         .focusedSceneValue(\.toggleSidebarAction, toggleSidebar)
         .focusedSceneValue(\.renameThreadAction, renameThreadAction)
+        .focusedSceneValue(\.switchThreadAction, switchThreadAction)
         .toolbar {
             ThreadToolbarContent(
                 thread: selectedThread,
@@ -68,11 +70,27 @@ struct ThreadListView: View {
         .onChange(of: scenePhase) { _, _ in
             updateAgentAttention(selectedThreadID: navigationModel.selectedThreadID)
         }
+        .onReceive(NotificationCenter.default.publisher(for: .activeThreadPickerShortcut)) { notification in
+            guard let request = notification.object as? ActiveThreadPickerShortcutRequest,
+                  !activeThreads.isEmpty else {
+                return
+            }
+            request.isHandled = true
+            isSwitchingThread = true
+        }
         .sheet(isPresented: $isCreatingThread) {
             NewThreadSheet(
                 recentPaths: recentProjectPaths,
                 create: createThread(in:createWorktree:),
                 cancel: { isCreatingThread = false }
+            )
+        }
+        .sheet(isPresented: $isSwitchingThread) {
+            ActiveThreadPicker(
+                threads: activeThreads,
+                selectedThreadID: navigationModel.selectedThreadID,
+                select: selectThreadFromPicker,
+                cancel: { isSwitchingThread = false }
             )
         }
         .alert(
@@ -215,6 +233,16 @@ struct ThreadListView: View {
     private var renameThreadAction: (() -> Void)? {
         guard selectedThread != nil else { return nil }
         return beginRenamingSelectedThread
+    }
+
+    private var switchThreadAction: (() -> Void)? {
+        guard !activeThreads.isEmpty else { return nil }
+        return { isSwitchingThread = true }
+    }
+
+    private func selectThreadFromPicker(_ threadID: UUID) {
+        isSwitchingThread = false
+        navigationModel.select(threadID: threadID)
     }
 
     private func activityStates(for threadID: UUID) -> [AgentActivityState] {

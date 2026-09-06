@@ -215,6 +215,46 @@ final class FissionDesktopUITests: XCTestCase {
     }
 
     @MainActor
+    func testCommandPOpensSearchAndSwitchesActiveThread() throws {
+        continueAfterFailure = false
+
+        let context = try launchIsolatedApp()
+        let app = context.app
+        defer {
+            app.terminate()
+            try? FileManager.default.removeItem(at: context.root)
+        }
+
+        XCTAssertTrue(app.staticTexts["Explore Fission"].waitForExistence(timeout: 10))
+        app.terminate()
+        try seedThreads(count: 3, databaseURL: context.databaseURL)
+        app.launch()
+
+        let terminal = app.scrollViews["terminal-workspace"]
+        XCTAssertTrue(terminal.waitForExistence(timeout: 10))
+        terminal.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 5)).click()
+        terminal.typeKey("p", modifierFlags: .command)
+
+        let searchField = app.textFields["active-thread-search-field"]
+        XCTAssertTrue(
+            searchField.waitForExistence(timeout: 5),
+            "Command-P should open the active Thread picker while the terminal has focus."
+        )
+        searchField.typeText("Seed 00")
+
+        searchField.typeKey(XCUIKeyboardKey.return, modifierFlags: [])
+
+        XCTAssertTrue(searchField.waitForNonExistence(timeout: 5))
+        let selectedTitle = app.descendants(matching: .any)["selected-thread-title"]
+        XCTAssertTrue(selectedTitle.waitForExistence(timeout: 5))
+        XCTAssertEqual(
+            displayedText(of: selectedTitle),
+            "Seed 00",
+            "Return should navigate to the highlighted Thread."
+        )
+    }
+
+    @MainActor
     func testSettledAccordionLoadsTwentyThreadsAtATime() throws {
         continueAfterFailure = false
 

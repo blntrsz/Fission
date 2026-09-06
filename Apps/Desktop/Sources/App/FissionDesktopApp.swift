@@ -3,7 +3,12 @@ import FissionCore
 import SwiftUI
 
 extension Notification.Name {
+    static let activeThreadPickerShortcut = Notification.Name("activeThreadPickerShortcut")
     static let terminalTabsShortcut = Notification.Name("terminalTabsShortcut")
+}
+
+final class ActiveThreadPickerShortcutRequest {
+    var isHandled = false
 }
 
 final class TerminalTabsShortcutRequest {
@@ -42,8 +47,14 @@ struct FissionDesktopApp: App {
         matching: .keyDown
     ) { event in
         let modifiers = event.modifierFlags.intersection([.command, .shift, .option, .control])
-        let action: TerminalTabsShortcutRequest.Action?
 
+        if modifiers == .command, event.keyCode == 35 {
+            let request = ActiveThreadPickerShortcutRequest()
+            NotificationCenter.default.post(name: .activeThreadPickerShortcut, object: request)
+            return request.isHandled ? nil : event
+        }
+
+        let action: TerminalTabsShortcutRequest.Action?
         if modifiers == .command, let index = terminalTabIndex(for: event.keyCode) {
             action = .selectTab(index)
         } else if modifiers == .command, event.keyCode == 17 {
@@ -128,6 +139,10 @@ private struct RenameThreadActionKey: FocusedValueKey {
     typealias Value = () -> Void
 }
 
+private struct SwitchThreadActionKey: FocusedValueKey {
+    typealias Value = () -> Void
+}
+
 struct TerminalTabsActions {
     let tabCount: Int
     let addTab: () -> Void
@@ -151,6 +166,11 @@ extension FocusedValues {
         set { self[RenameThreadActionKey.self] = newValue }
     }
 
+    var switchThreadAction: (() -> Void)? {
+        get { self[SwitchThreadActionKey.self] }
+        set { self[SwitchThreadActionKey.self] = newValue }
+    }
+
     var terminalTabsActions: TerminalTabsActions? {
         get { self[TerminalTabsActionsKey.self] }
         set { self[TerminalTabsActionsKey.self] = newValue }
@@ -162,6 +182,7 @@ private struct AppKeyboardCommands: Commands {
 
     @FocusedValue(\.toggleSidebarAction) private var toggleSidebar
     @FocusedValue(\.renameThreadAction) private var renameThread
+    @FocusedValue(\.switchThreadAction) private var switchThread
     @FocusedValue(\.terminalTabsActions) private var terminalTabs
 
     var body: some Commands {
@@ -243,6 +264,12 @@ private struct AppKeyboardCommands: Commands {
         }
 
         CommandGroup(after: .newItem) {
+            Button("Open Thread…") {
+                switchThread?()
+            }
+            .keyboardShortcut("p", modifiers: .command)
+            .disabled(switchThread == nil)
+
             Button("Rename Thread") {
                 renameThread?()
             }

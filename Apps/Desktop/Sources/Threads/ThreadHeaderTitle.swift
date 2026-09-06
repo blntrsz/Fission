@@ -64,6 +64,8 @@ struct ThreadHeaderTitle: View {
         .help(thread.workingDirectory ?? thread.title)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(projectName), \(thread.title)")
+        .accessibilityValue(thread.title)
+        .accessibilityIdentifier("selected-thread-title")
     }
 
     private var projectName: String {
