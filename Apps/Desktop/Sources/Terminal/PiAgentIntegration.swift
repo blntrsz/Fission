@@ -9,6 +9,7 @@ struct AgentFinishedNotification: Equatable, Sendable {
     let sequence: Int64
     let threadTitle: String
     let workingDirectory: String?
+    let projectName: String?
 }
 
 protocol AgentActivityNotificationAdapter: Sendable {
@@ -42,6 +43,7 @@ final class AgentActivityModel {
     private struct ThreadMetadata {
         let title: String
         let workingDirectory: String?
+        let projectName: String?
     }
 
     private var activitiesByThread: [UUID: [UUID: Activity]] = [:]
@@ -113,7 +115,14 @@ final class AgentActivityModel {
 
     func synchronizeThreads(_ threads: [AgentThread]) {
         threadMetadata = Dictionary(uniqueKeysWithValues: threads.map {
-            ($0.id, ThreadMetadata(title: $0.title, workingDirectory: $0.workingDirectory))
+            (
+                $0.id,
+                ThreadMetadata(
+                    title: $0.title,
+                    workingDirectory: $0.workingDirectory,
+                    projectName: $0.projectName
+                )
+            )
         })
     }
 
@@ -185,7 +194,8 @@ final class AgentActivityModel {
             tabID: tabID,
             sequence: sequence,
             threadTitle: metadata?.title ?? "Thread",
-            workingDirectory: metadata?.workingDirectory
+            workingDirectory: metadata?.workingDirectory,
+            projectName: metadata?.projectName
         )
 
         do {

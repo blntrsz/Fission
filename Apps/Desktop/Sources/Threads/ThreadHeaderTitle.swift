@@ -69,6 +69,9 @@ struct ThreadHeaderTitle: View {
     }
 
     private var projectName: String {
+        if let projectName = thread.projectName, !projectName.isEmpty {
+            return projectName
+        }
         guard let workingDirectory = thread.workingDirectory else { return "No Project" }
         let name = URL(fileURLWithPath: workingDirectory).lastPathComponent
         return name.isEmpty ? workingDirectory : name

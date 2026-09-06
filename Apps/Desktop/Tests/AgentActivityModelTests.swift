@@ -311,7 +311,11 @@ struct AgentActivityModelTests {
         let source = StubAgentActivityReportSource()
         let notifications = RecordingAgentActivityNotificationAdapter()
         let model = makeModel(source: source, notifications: notifications)
-        let knownThread = AgentThread(title: "Architecture review", workingDirectory: "/tmp/Fission")
+        let knownThread = AgentThread(
+            title: "Architecture review",
+            workingDirectory: "/tmp/worktrees/Fission/fission-branch",
+            projectName: "Fission"
+        )
         let knownTabID = UUID()
         let unknownThreadID = UUID()
         let unknownTabID = UUID()
@@ -336,7 +340,11 @@ struct AgentActivityModelTests {
         await Task.yield()
 
         #expect(notifications.notifications.map(\.threadTitle) == ["Architecture review", "Thread"])
-        #expect(notifications.notifications.first?.workingDirectory == "/tmp/Fission")
+        #expect(
+            notifications.notifications.first?.workingDirectory
+                == "/tmp/worktrees/Fission/fission-branch"
+        )
+        #expect(notifications.notifications.first?.projectName == "Fission")
     }
 
     @Test func notificationFailureDoesNotChangeActivity() async {

@@ -28,6 +28,8 @@ enum DesktopThreadCreator {
         makeIdentifier: @escaping @Sendable () -> String
     ) async -> UUID? {
         let threadID = UUID()
+        let selectedDirectory = URL(fileURLWithPath: workingDirectory).standardizedFileURL
+        let projectName = selectedDirectory.lastPathComponent
 
         do {
             let resolvedWorkingDirectory = if createWorktree {
@@ -44,7 +46,8 @@ enum DesktopThreadCreator {
             return await model.createThread(
                 id: threadID,
                 title: title,
-                workingDirectory: resolvedWorkingDirectory
+                workingDirectory: resolvedWorkingDirectory,
+                projectName: projectName.isEmpty ? nil : projectName
             )
         } catch {
             model.errorMessage = error.localizedDescription

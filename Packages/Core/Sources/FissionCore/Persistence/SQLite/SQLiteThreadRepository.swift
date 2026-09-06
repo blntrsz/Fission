@@ -10,6 +10,7 @@ private struct ThreadRecord: Codable, FetchableRecord, PersistableRecord, Sendab
     var title: String
     var status: String
     var workingDirectory: String?
+    var projectName: String?
     var createdAt: Date
     var updatedAt: Date
 
@@ -18,6 +19,7 @@ private struct ThreadRecord: Codable, FetchableRecord, PersistableRecord, Sendab
         case title
         case status
         case workingDirectory = "working_directory"
+        case projectName = "project_name"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }
@@ -32,6 +34,7 @@ private struct ThreadRecord: Codable, FetchableRecord, PersistableRecord, Sendab
         title = thread.title
         status = thread.status.rawValue
         workingDirectory = thread.workingDirectory
+        projectName = thread.projectName
         createdAt = thread.createdAt
         updatedAt = thread.updatedAt
     }
@@ -47,6 +50,7 @@ private struct ThreadRecord: Codable, FetchableRecord, PersistableRecord, Sendab
             title: title,
             status: status,
             workingDirectory: workingDirectory,
+            projectName: projectName,
             createdAt: createdAt,
             updatedAt: updatedAt
         )
@@ -79,6 +83,7 @@ public actor SQLiteThreadRepository {
         registerCreateThreadsMigration(in: &migrator)
         registerWorkingDirectoryMigration(in: &migrator)
         registerSettledStatusMigration(in: &migrator)
+        registerProjectNameMigration(in: &migrator)
         return migrator
     }
 
@@ -139,6 +144,14 @@ public actor SQLiteThreadRepository {
                 on: ThreadRecord.databaseTableName,
                 columns: ["updated_at"]
             )
+        }
+    }
+
+    private static func registerProjectNameMigration(in migrator: inout DatabaseMigrator) {
+        migrator.registerMigration("addThreadProjectName") { db in
+            try db.alter(table: ThreadRecord.databaseTableName) { table in
+                table.add(column: "project_name", .text)
+            }
         }
     }
 

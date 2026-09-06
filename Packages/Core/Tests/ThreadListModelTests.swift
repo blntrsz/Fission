@@ -46,13 +46,15 @@ struct ThreadListModelTests {
         let threadID = await model.createThread(
             id: expectedID,
             title: "  Ship Fission  ",
-            workingDirectory: "/tmp/fission"
+            workingDirectory: "/tmp/fission-worktrees/branch",
+            projectName: "Fission"
         )
         let thread = model.threads.first { $0.id == threadID }
 
         #expect(threadID == expectedID)
         #expect(thread?.title == "Ship Fission")
-        #expect(thread?.workingDirectory == "/tmp/fission")
+        #expect(thread?.workingDirectory == "/tmp/fission-worktrees/branch")
+        #expect(thread?.projectName == "Fission")
 
         let count = model.threads.count
         #expect(await model.createThread(title: " \n ") == nil)

@@ -41,6 +41,7 @@ struct DesktopThreadCreatorTests {
         let thread = try #require(model.threads.first { $0.id == threadID })
         #expect(thread.title == "fission-1de6e4")
         #expect(thread.workingDirectory == expectedWorkingDirectory.path)
+        #expect(thread.projectName == "Feature")
         #expect(FileManager.default.fileExists(atPath: expectedWorkingDirectory.path))
         #expect(try gitOutput(["-C", expectedWorktree.path, "branch", "--show-current"]) == "fission-1de6e4")
     }
@@ -78,6 +79,7 @@ struct DesktopThreadCreatorTests {
         let thread = try #require(model.threads.first { $0.id == threadID })
         #expect(thread.title == "fission-second")
         #expect(thread.workingDirectory == expectedWorktree.path)
+        #expect(thread.projectName == "ExampleRepo")
         #expect(try gitOutput(["-C", expectedWorktree.path, "branch", "--show-current"]) == "fission-second")
     }
 

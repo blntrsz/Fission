@@ -47,7 +47,8 @@ final class AgentTaskNotificationCoordinator: NSObject, AgentActivityNotificatio
 
             let content = UNMutableNotificationContent()
             content.title = "\"\(notification.threadTitle)\" finished"
-            if let projectName = Self.projectName(for: notification.workingDirectory) {
+            if let projectName = notification.projectName
+                ?? Self.projectName(for: notification.workingDirectory) {
                 content.body = projectName
             }
             content.sound = .default

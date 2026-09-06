@@ -54,7 +54,8 @@ public final class ThreadListModel {
     public func createThread(
         id: UUID = UUID(),
         title: String,
-        workingDirectory: String? = nil
+        workingDirectory: String? = nil,
+        projectName: String? = nil
     ) async -> UUID? {
         guard let repository, didLoad else { return nil }
 
@@ -64,7 +65,8 @@ public final class ThreadListModel {
         let thread = AgentThread(
             id: id,
             title: trimmedTitle,
-            workingDirectory: workingDirectory
+            workingDirectory: workingDirectory,
+            projectName: projectName
         )
 
         do {

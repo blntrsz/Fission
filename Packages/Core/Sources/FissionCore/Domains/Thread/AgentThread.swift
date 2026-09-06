@@ -14,6 +14,7 @@ public struct AgentThread: Identifiable, Hashable, Sendable {
     public private(set) var title: String
     public private(set) var status: Status
     public let workingDirectory: String?
+    public let projectName: String?
     public let createdAt: Date
     public private(set) var updatedAt: Date
 
@@ -24,6 +25,7 @@ public struct AgentThread: Identifiable, Hashable, Sendable {
         title: String,
         status: Status = .active,
         workingDirectory: String? = nil,
+        projectName: String? = nil,
         createdAt: Date = .now,
         updatedAt: Date? = nil
     ) {
@@ -31,6 +33,7 @@ public struct AgentThread: Identifiable, Hashable, Sendable {
         self.title = title
         self.status = status
         self.workingDirectory = workingDirectory
+        self.projectName = projectName
         self.createdAt = createdAt
         self.updatedAt = updatedAt ?? createdAt
     }

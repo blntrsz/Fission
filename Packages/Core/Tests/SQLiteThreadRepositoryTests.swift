@@ -9,7 +9,8 @@ struct SQLiteThreadRepositoryTests {
         let updatedAt = Date(timeIntervalSince1970: 2_000)
         var thread = AgentThread(
             title: "Initial title",
-            workingDirectory: "/tmp/project",
+            workingDirectory: "/tmp/worktrees/project/branch",
+            projectName: "project",
             createdAt: createdAt
         )
 
