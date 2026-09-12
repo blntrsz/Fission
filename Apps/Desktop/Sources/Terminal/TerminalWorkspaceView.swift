@@ -65,7 +65,6 @@ final class TerminalTabsViewModel: Identifiable {
     private(set) var tabs: [TerminalTab] = []
     var selectedTabID: UUID?
     private let agentActivityModel: AgentActivityModel
-    private var nextTabNumber = 1
 
     init(thread: AgentThread, agentActivityModel: AgentActivityModel) {
         id = thread.id
@@ -81,7 +80,6 @@ final class TerminalTabsViewModel: Identifiable {
             tabs = restoredTabs.map { record in
                 makeTab(id: record.id, number: record.number, title: record.title)
             }
-            nextTabNumber = (restoredTabs.map(\.number).max() ?? 0) + 1
             selectedTabID = restoredTabs.first(where: \.isSelected)?.id ?? tabs.first?.id
             updateVisibility()
         }
@@ -93,10 +91,25 @@ final class TerminalTabsViewModel: Identifiable {
     }
 
     func addTab() {
-        let tab = makeTab(id: UUID(), number: nextTabNumber)
-        nextTabNumber += 1
+        let number = TerminalTabNaming.nextNumber(existingTitles: tabs.map(\.title))
+        let tab = makeTab(id: UUID(), number: number)
         tabs.append(tab)
         select(tabID: tab.id)
+    }
+
+    func moveTab(id: UUID, to targetID: UUID) {
+        guard id != targetID,
+              let fromIndex = tabs.firstIndex(where: { $0.id == id }),
+              let toIndex = tabs.firstIndex(where: { $0.id == targetID })
+        else {
+            return
+        }
+
+        tabs.move(
+            fromOffsets: IndexSet(integer: fromIndex),
+            toOffset: toIndex > fromIndex ? toIndex + 1 : toIndex
+        )
+        persist()
     }
 
     func select(tabID: UUID) {
@@ -221,7 +234,7 @@ final class TerminalTab: Identifiable {
         didRename: @escaping () -> Void
     ) {
         self.id = id
-        self.title = title ?? "Tab \(number)"
+        self.title = title ?? TerminalTabNaming.title(for: number)
         self.didRename = didRename
 
         let persistentSession = PersistentTerminalSession(
@@ -419,6 +432,7 @@ private enum GhosttyUserConfiguration {
 struct TerminalWorkspaceView: View {
     @Bindable var model: TerminalTabsViewModel
     let isVisible: Bool
+    @State private var tabFrames: [UUID: CGRect] = [:]
 
     var body: some View {
         VStack(spacing: 0) {
@@ -480,9 +494,20 @@ struct TerminalWorkspaceView: View {
                             select: { model.select(tabID: tab.id) },
                             close: { model.close(tabID: tab.id) }
                         )
+                        .background {
+                            GeometryReader { proxy in
+                                Color.clear.preference(
+                                    key: TerminalTabFramePreferenceKey.self,
+                                    value: [tab.id: proxy.frame(in: .named("terminal-tab-bar"))]
+                                )
+                            }
+                        }
+                        .simultaneousGesture(tabReorderGesture(for: tab.id))
                     }
                 }
                 .padding(.horizontal, 8)
+                .coordinateSpace(name: "terminal-tab-bar")
+                .onPreferenceChange(TerminalTabFramePreferenceKey.self) { tabFrames = $0 }
             }
             .accessibilityIdentifier("terminal-workspace")
 
@@ -516,6 +541,30 @@ struct TerminalWorkspaceView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .clipped()
+    }
+
+    private func tabReorderGesture(for tabID: UUID) -> some Gesture {
+        LongPressGesture(minimumDuration: 0.2)
+            .sequenced(
+                before: DragGesture(minimumDistance: 0, coordinateSpace: .named("terminal-tab-bar"))
+            )
+            .onChanged { value in
+                guard case .second(true, let drag?) = value,
+                      let targetID = tabAt(x: drag.location.x),
+                      targetID != tabID
+                else {
+                    return
+                }
+                model.moveTab(id: tabID, to: targetID)
+            }
+    }
+
+    private func tabAt(x: CGFloat) -> UUID? {
+        let orderedFrames = model.tabs.compactMap { tab -> (id: UUID, frame: CGRect)? in
+            guard let frame = tabFrames[tab.id] else { return nil }
+            return (tab.id, frame)
+        }
+        return orderedFrames.first { x < $0.frame.maxX }?.id ?? orderedFrames.last?.id
     }
 }
 
@@ -595,5 +644,13 @@ private struct TerminalTabButton: View {
     private func beginRenaming() {
         proposedTitle = tab.title
         isRenaming = true
+    }
+}
+
+private struct TerminalTabFramePreferenceKey: PreferenceKey {
+    static var defaultValue: [UUID: CGRect] = [:]
+
+    static func reduce(value: inout [UUID: CGRect], nextValue: () -> [UUID: CGRect]) {
+        value.merge(nextValue(), uniquingKeysWith: { $1 })
     }
 }
