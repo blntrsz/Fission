@@ -56,7 +56,7 @@ extension FissionDesktopUITests {
             app.buttons["Tab 2"].frame.minX
         )
 
-        app.buttons["Tab 2"].press(forDuration: 0.3, thenDragTo: app.buttons["Tab 1"])
+        app.buttons["Tab 2"].press(forDuration: 0.5, thenDragTo: app.buttons["Tab 1"])
 
         XCTAssertTrue(
             waitUntil(timeout: 5) {

@@ -4,7 +4,6 @@ import FissionCore
 import GhosttyTerminal
 import Observation
 import SwiftUI
-import UniformTypeIdentifiers
 
 @MainActor
 @Observable
@@ -433,7 +432,7 @@ private enum GhosttyUserConfiguration {
 struct TerminalWorkspaceView: View {
     @Bindable var model: TerminalTabsViewModel
     let isVisible: Bool
-    @State private var draggingTabID: UUID?
+    @State private var tabFrames: [UUID: CGRect] = [:]
 
     var body: some View {
         VStack(spacing: 0) {
@@ -495,21 +494,20 @@ struct TerminalWorkspaceView: View {
                             select: { model.select(tabID: tab.id) },
                             close: { model.close(tabID: tab.id) }
                         )
-                        .onDrag {
-                            draggingTabID = tab.id
-                            return NSItemProvider(object: tab.id.uuidString as NSString)
+                        .background {
+                            GeometryReader { proxy in
+                                Color.clear.preference(
+                                    key: TerminalTabFramePreferenceKey.self,
+                                    value: [tab.id: proxy.frame(in: .named("terminal-tab-bar"))]
+                                )
+                            }
                         }
-                        .onDrop(
-                            of: [.text],
-                            delegate: TerminalTabReorderDropDelegate(
-                                tabID: tab.id,
-                                model: model,
-                                draggingTabID: $draggingTabID
-                            )
-                        )
+                        .simultaneousGesture(tabReorderGesture(for: tab.id))
                     }
                 }
                 .padding(.horizontal, 8)
+                .coordinateSpace(name: "terminal-tab-bar")
+                .onPreferenceChange(TerminalTabFramePreferenceKey.self) { tabFrames = $0 }
             }
             .accessibilityIdentifier("terminal-workspace")
 
@@ -543,6 +541,30 @@ struct TerminalWorkspaceView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .clipped()
+    }
+
+    private func tabReorderGesture(for tabID: UUID) -> some Gesture {
+        LongPressGesture(minimumDuration: 0.2)
+            .sequenced(
+                before: DragGesture(minimumDistance: 0, coordinateSpace: .named("terminal-tab-bar"))
+            )
+            .onChanged { value in
+                guard case .second(true, let drag?) = value,
+                      let targetID = tabAt(x: drag.location.x),
+                      targetID != tabID
+                else {
+                    return
+                }
+                model.moveTab(id: tabID, to: targetID)
+            }
+    }
+
+    private func tabAt(x: CGFloat) -> UUID? {
+        let orderedFrames = model.tabs.compactMap { tab -> (id: UUID, frame: CGRect)? in
+            guard let frame = tabFrames[tab.id] else { return nil }
+            return (tab.id, frame)
+        }
+        return orderedFrames.first { x < $0.frame.maxX }?.id ?? orderedFrames.last?.id
     }
 }
 
@@ -625,26 +647,10 @@ private struct TerminalTabButton: View {
     }
 }
 
-private struct TerminalTabReorderDropDelegate: DropDelegate {
-    let tabID: UUID
-    let model: TerminalTabsViewModel
-    @Binding var draggingTabID: UUID?
+private struct TerminalTabFramePreferenceKey: PreferenceKey {
+    static var defaultValue: [UUID: CGRect] = [:]
 
-    func validateDrop(info: DropInfo) -> Bool {
-        info.hasItemsConforming(to: [.text])
-    }
-
-    func dropEntered(info: DropInfo) {
-        guard let draggingTabID, draggingTabID != tabID else { return }
-        model.moveTab(id: draggingTabID, to: tabID)
-    }
-
-    func dropUpdated(info: DropInfo) -> DropProposal? {
-        DropProposal(operation: .move)
-    }
-
-    func performDrop(info: DropInfo) -> Bool {
-        draggingTabID = nil
-        return true
+    static func reduce(value: inout [UUID: CGRect], nextValue: () -> [UUID: CGRect]) {
+        value.merge(nextValue(), uniquingKeysWith: { $1 })
     }
 }
