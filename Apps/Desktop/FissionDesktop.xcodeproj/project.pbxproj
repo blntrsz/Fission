@@ -27,6 +27,7 @@
 		A10000000000000000000019 /* TerminalURLPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000019 /* TerminalURLPresentation.swift */; };
 		A10000000000000000000020 /* TerminalSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000020 /* TerminalSearch.swift */; };
 		A10000000000000000000021 /* ActiveThreadPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000021 /* ActiveThreadPicker.swift */; };
+		A10000000000000000000022 /* TerminalTabNaming.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000022 /* TerminalTabNaming.swift */; };
 		E10000000000000000000001 /* ApplicationUpdateController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E20000000000000000000001 /* ApplicationUpdateController.swift */; };
 		E10000000000000000000002 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = E90000000000000000000002 /* Sparkle */; };
 		D10000000000000000000001 /* TerminalExecutionProtocol.swift in Sources */ = {isa = PBXBuildFile; fileRef = D20000000000000000000001 /* TerminalExecutionProtocol.swift */; };
@@ -41,8 +42,10 @@
 		B10000000000000000000002 /* FissionCore in Frameworks */ = {isa = PBXBuildFile; productRef = A90000000000000000000001 /* FissionCore */; };
 		B10000000000000000000006 /* TerminalInputContentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000006 /* TerminalInputContentTests.swift */; };
 		B10000000000000000000007 /* ActiveThreadSearchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000007 /* ActiveThreadSearchTests.swift */; };
+		B10000000000000000000008 /* TerminalTabNamingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000008 /* TerminalTabNamingTests.swift */; };
 		C10000000000000000000001 /* FissionDesktopUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000001 /* FissionDesktopUITests.swift */; };
 		C10000000000000000000002 /* TerminalSearchUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000003 /* TerminalSearchUITests.swift */; };
+		C10000000000000000000003 /* TerminalTabsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000004 /* TerminalTabsUITests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -90,6 +93,7 @@
 		A20000000000000000000019 /* TerminalURLPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalURLPresentation.swift; sourceTree = "<group>"; };
 		A20000000000000000000020 /* TerminalSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalSearch.swift; sourceTree = "<group>"; };
 		A20000000000000000000021 /* ActiveThreadPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActiveThreadPicker.swift; sourceTree = "<group>"; };
+		A20000000000000000000022 /* TerminalTabNaming.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalTabNaming.swift; sourceTree = "<group>"; };
 		B20000000000000000000001 /* DesktopThreadCreatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesktopThreadCreatorTests.swift; sourceTree = "<group>"; };
 		B20000000000000000000005 /* TerminalURLHandlerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalURLHandlerTests.swift; sourceTree = "<group>"; };
 		B20000000000000000000002 /* FissionDesktopTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FissionDesktopTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -97,8 +101,10 @@
 		B20000000000000000000004 /* DesktopNavigationModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesktopNavigationModelTests.swift; sourceTree = "<group>"; };
 		B20000000000000000000006 /* TerminalInputContentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalInputContentTests.swift; sourceTree = "<group>"; };
 		B20000000000000000000007 /* ActiveThreadSearchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActiveThreadSearchTests.swift; sourceTree = "<group>"; };
+		B20000000000000000000008 /* TerminalTabNamingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalTabNamingTests.swift; sourceTree = "<group>"; };
 		C20000000000000000000001 /* FissionDesktopUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FissionDesktopUITests.swift; sourceTree = "<group>"; };
 		C20000000000000000000003 /* TerminalSearchUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalSearchUITests.swift; sourceTree = "<group>"; };
+		C20000000000000000000004 /* TerminalTabsUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalTabsUITests.swift; sourceTree = "<group>"; };
 		C20000000000000000000002 /* FissionDesktopUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FissionDesktopUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		D20000000000000000000001 /* TerminalExecutionProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalExecutionProtocol.swift; sourceTree = "<group>"; };
 		D20000000000000000000002 /* TerminalExecutionClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalExecutionClient.swift; sourceTree = "<group>"; };
@@ -208,6 +214,7 @@
 			isa = PBXGroup;
 			children = (
 				A20000000000000000000005 /* TerminalWorkspaceView.swift */,
+				A20000000000000000000022 /* TerminalTabNaming.swift */,
 				A20000000000000000000012 /* PiAgentIntegration.swift */,
 				A20000000000000000000017 /* TerminalURLHandler.swift */,
 				A20000000000000000000019 /* TerminalURLPresentation.swift */,
@@ -265,6 +272,7 @@
 				B20000000000000000000004 /* DesktopNavigationModelTests.swift */,
 				B20000000000000000000005 /* TerminalURLHandlerTests.swift */,
 				B20000000000000000000006 /* TerminalInputContentTests.swift */,
+				B20000000000000000000008 /* TerminalTabNamingTests.swift */,
 			);
 			path = Tests;
 			sourceTree = "<group>";
@@ -274,6 +282,7 @@
 			children = (
 				C20000000000000000000001 /* FissionDesktopUITests.swift */,
 				C20000000000000000000003 /* TerminalSearchUITests.swift */,
+				C20000000000000000000004 /* TerminalTabsUITests.swift */,
 			);
 			path = UITests;
 			sourceTree = "<group>";
@@ -435,6 +444,7 @@
 				A10000000000000000000002 /* ThreadListView.swift in Sources */,
 				A10000000000000000000021 /* ActiveThreadPicker.swift in Sources */,
 				A10000000000000000000005 /* TerminalWorkspaceView.swift in Sources */,
+				A10000000000000000000022 /* TerminalTabNaming.swift in Sources */,
 				A10000000000000000000020 /* TerminalSearch.swift in Sources */,
 				A10000000000000000000007 /* NewThreadSheet.swift in Sources */,
 				A10000000000000000000008 /* HoverFeedback.swift in Sources */,
@@ -463,6 +473,7 @@
 				B10000000000000000000004 /* DesktopNavigationModelTests.swift in Sources */,
 				B10000000000000000000005 /* TerminalURLHandlerTests.swift in Sources */,
 				B10000000000000000000006 /* TerminalInputContentTests.swift in Sources */,
+				B10000000000000000000008 /* TerminalTabNamingTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -472,6 +483,7 @@
 			files = (
 				C10000000000000000000001 /* FissionDesktopUITests.swift in Sources */,
 				C10000000000000000000002 /* TerminalSearchUITests.swift in Sources */,
+				C10000000000000000000003 /* TerminalTabsUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

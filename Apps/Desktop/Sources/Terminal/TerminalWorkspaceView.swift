@@ -4,6 +4,7 @@ import FissionCore
 import GhosttyTerminal
 import Observation
 import SwiftUI
+import UniformTypeIdentifiers
 
 @MainActor
 @Observable
@@ -65,7 +66,6 @@ final class TerminalTabsViewModel: Identifiable {
     private(set) var tabs: [TerminalTab] = []
     var selectedTabID: UUID?
     private let agentActivityModel: AgentActivityModel
-    private var nextTabNumber = 1
 
     init(thread: AgentThread, agentActivityModel: AgentActivityModel) {
         id = thread.id
@@ -81,7 +81,6 @@ final class TerminalTabsViewModel: Identifiable {
             tabs = restoredTabs.map { record in
                 makeTab(id: record.id, number: record.number, title: record.title)
             }
-            nextTabNumber = (restoredTabs.map(\.number).max() ?? 0) + 1
             selectedTabID = restoredTabs.first(where: \.isSelected)?.id ?? tabs.first?.id
             updateVisibility()
         }
@@ -93,10 +92,25 @@ final class TerminalTabsViewModel: Identifiable {
     }
 
     func addTab() {
-        let tab = makeTab(id: UUID(), number: nextTabNumber)
-        nextTabNumber += 1
+        let number = TerminalTabNaming.nextNumber(existingTitles: tabs.map(\.title))
+        let tab = makeTab(id: UUID(), number: number)
         tabs.append(tab)
         select(tabID: tab.id)
+    }
+
+    func moveTab(id: UUID, to targetID: UUID) {
+        guard id != targetID,
+              let fromIndex = tabs.firstIndex(where: { $0.id == id }),
+              let toIndex = tabs.firstIndex(where: { $0.id == targetID })
+        else {
+            return
+        }
+
+        tabs.move(
+            fromOffsets: IndexSet(integer: fromIndex),
+            toOffset: toIndex > fromIndex ? toIndex + 1 : toIndex
+        )
+        persist()
     }
 
     func select(tabID: UUID) {
@@ -221,7 +235,7 @@ final class TerminalTab: Identifiable {
         didRename: @escaping () -> Void
     ) {
         self.id = id
-        self.title = title ?? "Tab \(number)"
+        self.title = title ?? TerminalTabNaming.title(for: number)
         self.didRename = didRename
 
         let persistentSession = PersistentTerminalSession(
@@ -419,6 +433,7 @@ private enum GhosttyUserConfiguration {
 struct TerminalWorkspaceView: View {
     @Bindable var model: TerminalTabsViewModel
     let isVisible: Bool
+    @State private var draggingTabID: UUID?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -479,6 +494,18 @@ struct TerminalWorkspaceView: View {
                             isSelected: model.selectedTabID == tab.id,
                             select: { model.select(tabID: tab.id) },
                             close: { model.close(tabID: tab.id) }
+                        )
+                        .onDrag {
+                            draggingTabID = tab.id
+                            return NSItemProvider(object: tab.id.uuidString as NSString)
+                        }
+                        .onDrop(
+                            of: [.text],
+                            delegate: TerminalTabReorderDropDelegate(
+                                tabID: tab.id,
+                                model: model,
+                                draggingTabID: $draggingTabID
+                            )
                         )
                     }
                 }
@@ -595,5 +622,29 @@ private struct TerminalTabButton: View {
     private func beginRenaming() {
         proposedTitle = tab.title
         isRenaming = true
+    }
+}
+
+private struct TerminalTabReorderDropDelegate: DropDelegate {
+    let tabID: UUID
+    let model: TerminalTabsViewModel
+    @Binding var draggingTabID: UUID?
+
+    func validateDrop(info: DropInfo) -> Bool {
+        info.hasItemsConforming(to: [.text])
+    }
+
+    func dropEntered(info: DropInfo) {
+        guard let draggingTabID, draggingTabID != tabID else { return }
+        model.moveTab(id: draggingTabID, to: tabID)
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: .move)
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        draggingTabID = nil
+        return true
     }
 }
