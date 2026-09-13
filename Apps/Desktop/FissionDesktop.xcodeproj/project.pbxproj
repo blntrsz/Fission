@@ -16,6 +16,7 @@
 		A10000000000000000000008 /* HoverFeedback.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000008 /* HoverFeedback.swift */; };
 		A10000000000000000000009 /* ThreadHeaderTitle.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000009 /* ThreadHeaderTitle.swift */; };
 		A10000000000000000000010 /* DesktopThreadCreator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000010 /* DesktopThreadCreator.swift */; };
+		A10000000000000000000026 /* ProjectIsolator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000026 /* ProjectIsolator.swift */; };
 		A10000000000000000000011 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000011 /* Assets.xcassets */; };
 		A10000000000000000000012 /* PiAgentIntegration.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000012 /* PiAgentIntegration.swift */; };
 		A10000000000000000000017 /* TerminalURLHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000017 /* TerminalURLHandler.swift */; };
@@ -87,6 +88,7 @@
 		A20000000000000000000008 /* HoverFeedback.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HoverFeedback.swift; sourceTree = "<group>"; };
 		A20000000000000000000009 /* ThreadHeaderTitle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThreadHeaderTitle.swift; sourceTree = "<group>"; };
 		A20000000000000000000010 /* DesktopThreadCreator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesktopThreadCreator.swift; sourceTree = "<group>"; };
+		A20000000000000000000026 /* ProjectIsolator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectIsolator.swift; sourceTree = "<group>"; };
 		A20000000000000000000011 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		E20000000000000000000002 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A20000000000000000000012 /* PiAgentIntegration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PiAgentIntegration.swift; sourceTree = "<group>"; };
@@ -221,6 +223,7 @@
 				A20000000000000000000025 /* RemoteDirectoryCatalog.swift */,
 				A20000000000000000000009 /* ThreadHeaderTitle.swift */,
 				A20000000000000000000010 /* DesktopThreadCreator.swift */,
+				A20000000000000000000026 /* ProjectIsolator.swift */,
 			);
 			path = Threads;
 			sourceTree = "<group>";
@@ -470,6 +473,7 @@
 				A10000000000000000000008 /* HoverFeedback.swift in Sources */,
 				A10000000000000000000009 /* ThreadHeaderTitle.swift in Sources */,
 				A10000000000000000000010 /* DesktopThreadCreator.swift in Sources */,
+				A10000000000000000000026 /* ProjectIsolator.swift in Sources */,
 				A10000000000000000000012 /* PiAgentIntegration.swift in Sources */,
 				A10000000000000000000014 /* AgentTaskNotificationCoordinator.swift in Sources */,
 				A10000000000000000000015 /* DesktopNavigationModel.swift in Sources */,

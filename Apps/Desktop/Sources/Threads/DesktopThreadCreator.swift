@@ -1,22 +1,21 @@
 import FissionCore
 import Foundation
 
-/// Creates a desktop Thread, optionally in a Git worktree.
+/// Creates a desktop Thread, optionally in a copy-on-write isolate.
 enum DesktopThreadCreator {
     @MainActor
     static func create(
         in model: ThreadListModel,
         workingDirectory: String,
-        createWorktree: Bool,
-        worktreeBranch: String? = nil
+        createIsolate: Bool,
+        isolateBranch: String? = nil
     ) async -> UUID? {
         await create(
             in: model,
             workingDirectory: workingDirectory,
-            createWorktree: createWorktree,
-            worktreeRoot: FileManager.default.homeDirectoryForCurrentUser
-                .appending(path: ".fission/worktrees", directoryHint: .isDirectory),
-            worktreeBranch: worktreeBranch,
+            createIsolate: createIsolate,
+            isolateRoot: ProjectIsolator.defaultRoot,
+            isolateBranch: isolateBranch,
             makeIdentifier: randomIdentifier
         )
     }
@@ -25,9 +24,9 @@ enum DesktopThreadCreator {
     static func create(
         in model: ThreadListModel,
         workingDirectory: String,
-        createWorktree: Bool,
-        worktreeRoot: URL,
-        worktreeBranch: String? = nil,
+        createIsolate: Bool,
+        isolateRoot: URL,
+        isolateBranch: String? = nil,
         makeIdentifier: @escaping @Sendable () -> String
     ) async -> UUID? {
         let threadID = UUID()
@@ -35,11 +34,11 @@ enum DesktopThreadCreator {
         let projectName = selectedDirectory.lastPathComponent
 
         do {
-            let resolvedWorkingDirectory = if createWorktree {
-                try await makeWorktree(
+            let resolvedWorkingDirectory = if createIsolate {
+                try await makeIsolate(
                     from: workingDirectory,
-                    worktreeRoot: worktreeRoot,
-                    requestedBranch: GitWorktreeBranch.normalized(worktreeBranch),
+                    isolateRoot: isolateRoot,
+                    requestedBranch: GitWorktreeBranch.normalized(isolateBranch),
                     makeIdentifier: makeIdentifier
                 )
             } else {
@@ -88,134 +87,25 @@ enum DesktopThreadCreator {
         )
     }
 
-    private static func makeWorktree(
+    private static func makeIsolate(
         from workingDirectory: String,
-        worktreeRoot: URL,
+        isolateRoot: URL,
         requestedBranch: String?,
         makeIdentifier: @escaping @Sendable () -> String
     ) async throws -> String {
         try await Task.detached(priority: .userInitiated) {
-            try createSynchronously(
+            try ProjectIsolator.create(
                 from: workingDirectory,
-                worktreeRoot: worktreeRoot,
+                isolateRoot: isolateRoot,
                 requestedBranch: requestedBranch,
                 makeIdentifier: makeIdentifier
             )
         }.value
     }
 
-    private static func createSynchronously(
-        from workingDirectory: String,
-        worktreeRoot: URL,
-        requestedBranch: String?,
-        makeIdentifier: () -> String
-    ) throws -> String {
-        let selectedDirectory = URL(fileURLWithPath: workingDirectory).standardizedFileURL
-        let repositoryPath = try runGit([
-            "-C", selectedDirectory.path,
-            "rev-parse", "--show-toplevel"
-        ]).trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !repositoryPath.isEmpty else {
-            throw GitWorktreeError.notGitRepository
-        }
-
-        let repository = URL(fileURLWithPath: repositoryPath).standardizedFileURL
-        let relativePath = selectedDirectory.path
-            .dropFirst(repository.path.count)
-            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        let repositoryWorktrees = worktreeRoot
-            .appending(path: repository.lastPathComponent, directoryHint: .isDirectory)
-        let branchAndPath = try resolveBranchAndWorktree(
-            requestedBranch: requestedBranch,
-            repository: repository,
-            repositoryWorktrees: repositoryWorktrees,
-            makeIdentifier: makeIdentifier
-        )
-
-        try FileManager.default.createDirectory(
-            at: repositoryWorktrees,
-            withIntermediateDirectories: true
-        )
-        _ = try runGit([
-            "-C", repository.path,
-            "worktree", "add", "-b", branchAndPath.branch, branchAndPath.worktree.path
-        ])
-
-        guard !relativePath.isEmpty else { return branchAndPath.worktree.path }
-        return branchAndPath.worktree.appending(path: relativePath).path
-    }
-
-    private static func resolveBranchAndWorktree(
-        requestedBranch: String?,
-        repository: URL,
-        repositoryWorktrees: URL,
-        makeIdentifier: () -> String
-    ) throws -> (branch: String, worktree: URL) {
-        if let requestedBranch {
-            guard GitWorktreeBranch.isValid(requestedBranch) else {
-                throw GitWorktreeError.invalidBranchName
-            }
-            let worktree = repositoryWorktrees.appending(
-                path: requestedBranch,
-                directoryHint: .isDirectory
-            )
-            if FileManager.default.fileExists(atPath: worktree.path) {
-                throw GitWorktreeError.worktreeExists(requestedBranch)
-            }
-            if try branchExists(requestedBranch, in: repository) {
-                throw GitWorktreeError.branchAlreadyExists(requestedBranch)
-            }
-            return (requestedBranch, worktree)
-        }
-
-        var branch = ""
-        var worktree = repositoryWorktrees
-        repeat {
-            branch = "fission-\(makeIdentifier())"
-            worktree = repositoryWorktrees
-                .appending(path: branch, directoryHint: .isDirectory)
-        } while try FileManager.default.fileExists(atPath: worktree.path)
-            || branchExists(branch, in: repository)
-        return (branch, worktree)
-    }
-
-    private static func branchExists(_ branch: String, in repository: URL) throws -> Bool {
-        !(try runGit([
-            "-C", repository.path,
-            "branch", "--list", "--", branch
-        ])).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
     private static func randomIdentifier() -> String {
         let characters = Array("abcdefghijklmnopqrstuvwxyz0123456789")
         return String((0..<6).compactMap { _ in characters.randomElement() })
-    }
-
-    private static func runGit(_ arguments: [String]) throws -> String {
-        let process = Process()
-        let output = Pipe()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/git")
-        process.arguments = arguments
-        process.standardOutput = output
-        process.standardError = output
-
-        do {
-            try process.run()
-        } catch {
-            throw GitWorktreeError.gitUnavailable
-        }
-
-        let data = output.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-        let message = (String(bytes: data, encoding: .utf8) ?? "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard process.terminationStatus == 0 else {
-            if arguments.contains("rev-parse") {
-                throw GitWorktreeError.notGitRepository
-            }
-            throw GitWorktreeError.commandFailed(message)
-        }
-        return message
     }
 }
 
@@ -245,32 +135,6 @@ enum GitWorktreeBranch {
                 && !component.hasPrefix(".")
                 && !component.hasSuffix(".")
                 && !component.hasSuffix(".lock")
-        }
-    }
-}
-
-private enum GitWorktreeError: LocalizedError {
-    case gitUnavailable
-    case notGitRepository
-    case invalidBranchName
-    case branchAlreadyExists(String)
-    case worktreeExists(String)
-    case commandFailed(String)
-
-    var errorDescription: String? {
-        switch self {
-        case .gitUnavailable:
-            "Git could not be started."
-        case .notGitRepository:
-            "The selected project folder is not inside a Git repository."
-        case .invalidBranchName:
-            "Enter a valid Git branch name."
-        case let .branchAlreadyExists(branch):
-            "A branch named \"\(branch)\" already exists."
-        case let .worktreeExists(branch):
-            "A worktree for \"\(branch)\" already exists."
-        case let .commandFailed(message):
-            message.isEmpty ? "Git could not create the worktree." : message
         }
     }
 }

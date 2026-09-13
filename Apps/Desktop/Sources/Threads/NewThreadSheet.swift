@@ -4,7 +4,7 @@ import FissionCore
 import SwiftUI
 
 enum NewThreadRequest: Equatable {
-    case local(URL, createWorktree: Bool, branchName: String?)
+    case local(URL, createIsolate: Bool, branchName: String?)
     case remote(RemoteMachine, projectPath: String)
 }
 
@@ -21,8 +21,8 @@ struct NewThreadSheet: View {
     @State private var selectedMachineID: UUID?
     @State private var remoteProjectPath = ""
     @State private var remoteListingsByDirectory: [String: RemoteDirectoryListing] = [:]
-    @State private var worktreeBranchName = ""
-    @AppStorage("createThreadsInNewWorktree") private var createInNewWorktree = false
+    @State private var isolateBranchName = ""
+    @AppStorage("createThreadsInNewIsolate") private var createInNewIsolate = true
     @AppStorage("newThreadLocation") private var locationRaw = NewThreadLocation.local.rawValue
     @FocusState private var focusedField: Field?
 
@@ -341,21 +341,21 @@ struct NewThreadSheet: View {
             Spacer()
 
             if location == .local {
-                Toggle("New worktree", isOn: $createInNewWorktree)
+                Toggle("New isolated workspace", isOn: $createInNewIsolate)
                     .toggleStyle(.switch)
-                    .accessibilityIdentifier("new-worktree-toggle")
-                    .help("Create an isolated Git branch and use its checkout for this Thread.")
+                    .accessibilityIdentifier("isolate-toggle")
+                    .help("Copy this project into an isolated folder for this Thread.")
 
-                if createInNewWorktree {
-                    TextField("Branch name", text: $worktreeBranchName)
+                if createInNewIsolate {
+                    TextField("Branch name", text: $isolateBranchName)
                         .textFieldStyle(.roundedBorder)
                         .font(.body)
                         .foregroundStyle(.primary)
                         .frame(width: 220)
                         .focused($focusedField, equals: .branch)
-                        .accessibilityLabel("Worktree branch name")
-                        .accessibilityIdentifier("worktree-branch-field")
-                        .help("Git branch for the new worktree. Leave blank to generate one.")
+                        .accessibilityLabel("Isolate branch name")
+                        .accessibilityIdentifier("isolate-branch-field")
+                        .help("Git branch for the isolated workspace. Leave blank to generate one.")
                 }
             }
 
@@ -472,15 +472,15 @@ struct NewThreadSheet: View {
     private var canCreate: Bool {
         switch location {
         case .local:
-            !projects.isEmpty && worktreeBranchIsAllowed
+            !projects.isEmpty && isolateBranchIsAllowed
         case .remote:
             selectedMachine != nil && selectedRemoteProjectPath != nil
         }
     }
 
-    private var worktreeBranchIsAllowed: Bool {
-        guard createInNewWorktree else { return true }
-        guard let branch = GitWorktreeBranch.normalized(worktreeBranchName) else {
+    private var isolateBranchIsAllowed: Bool {
+        guard createInNewIsolate else { return true }
+        guard let branch = GitWorktreeBranch.normalized(isolateBranchName) else {
             return true
         }
         return GitWorktreeBranch.isValid(branch)
@@ -529,9 +529,9 @@ struct NewThreadSheet: View {
             guard projects.indices.contains(selectedIndex) else { return }
             create(.local(
                 projects[selectedIndex].url,
-                createWorktree: createInNewWorktree,
-                branchName: createInNewWorktree
-                    ? GitWorktreeBranch.normalized(worktreeBranchName)
+                createIsolate: createInNewIsolate,
+                branchName: createInNewIsolate
+                    ? GitWorktreeBranch.normalized(isolateBranchName)
                     : nil
             ))
         case .remote:

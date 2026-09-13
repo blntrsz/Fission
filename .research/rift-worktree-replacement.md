@@ -154,7 +154,7 @@ Costs of that model:
 
 - **Not a Git worktree.** `git worktree list` will not show it. Fetch in the source does not update the isolate's objects until the isolate fetches.
 - **Detached HEAD** (Rift) makes `git push -u` / PR agents fail until they create a branch. Fission today *is* that branch. A spin should create `fission-<id>` on the clone **without** `reset --hard`.
-- **Same-volume CoW.** `~/.fission/worktrees` on the home volume will *byte-copy* (or fail, if we refuse fallback) when the project lives on an external APFS volume. Sibling `../.rifts/<project>/` (Rift's default) is the correct default storage.
+- **Same-volume CoW.** Isolates stay under `~/.fission/worktrees`. If the project is on another volume, clone fails (no byte-copy, no worktree).
 - **Apple `clonefile` on directories.** Rift's fast path does what Apple discourages (locks the source hierarchy). Fission should use recursive `copyfile` clone: slightly more syscalls, no kernel stall risk.
 
 ```mermaid
@@ -219,7 +219,7 @@ Apps/Desktop/Sources/Threads/
 └── ProjectIsolator.swift        # volume probe, copyfile clone, switch -c, delete
 ```
 
-Delete `git worktree add` and `~/.fission/worktrees` from the create path. Rename `createWorktree` → `createIsolate` through sheet, creator, tests, UITest ids.
+Delete `git worktree add` from the create path. Keep writing under `~/.fission/worktrees`, with the inner `<repo>/` leaf. Rename `createWorktree` → `createIsolate` through sheet, creator, tests, UITest ids.
 
 Tests: dirty + untracked file survive; source unchanged; clone `HEAD` is `fission-<id>`; source still on original branch; linked worktree source errors; settle removes dest. Skip clone tests only if the runner volume cannot `clonefile`.
 
