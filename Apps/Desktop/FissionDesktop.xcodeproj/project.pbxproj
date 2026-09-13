@@ -24,6 +24,8 @@
 		A10000000000000000000015 /* DesktopNavigationModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000015 /* DesktopNavigationModel.swift */; };
         A10000000000000000000016 /* NotificationSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000016 /* NotificationSettingsView.swift */; };
 		A10000000000000000000023 /* RemoteMachinesSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000023 /* RemoteMachinesSettingsView.swift */; };
+		A10000000000000000000024 /* ProjectPathResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000024 /* ProjectPathResolver.swift */; };
+		A10000000000000000000025 /* RemoteDirectoryCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000025 /* RemoteDirectoryCatalog.swift */; };
 		A10000000000000000000018 /* TerminalInput.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000018 /* TerminalInput.swift */; };
 		A10000000000000000000019 /* TerminalURLPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000019 /* TerminalURLPresentation.swift */; };
 		A10000000000000000000020 /* TerminalSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000020 /* TerminalSearch.swift */; };
@@ -45,6 +47,7 @@
 		B10000000000000000000007 /* ActiveThreadSearchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000007 /* ActiveThreadSearchTests.swift */; };
 		B10000000000000000000008 /* TerminalTabNamingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000008 /* TerminalTabNamingTests.swift */; };
 		B10000000000000000000009 /* DesktopRemoteThreadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000009 /* DesktopRemoteThreadTests.swift */; };
+		B10000000000000000000010 /* ProjectPathResolverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000000000000000000010 /* ProjectPathResolverTests.swift */; };
 		C10000000000000000000001 /* FissionDesktopUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000001 /* FissionDesktopUITests.swift */; };
 		C10000000000000000000002 /* TerminalSearchUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000003 /* TerminalSearchUITests.swift */; };
 		C10000000000000000000003 /* TerminalTabsUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C20000000000000000000004 /* TerminalTabsUITests.swift */; };
@@ -92,6 +95,8 @@
 		A20000000000000000000015 /* DesktopNavigationModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesktopNavigationModel.swift; sourceTree = "<group>"; };
 		A20000000000000000000016 /* NotificationSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationSettingsView.swift; sourceTree = "<group>"; };
 		A20000000000000000000023 /* RemoteMachinesSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteMachinesSettingsView.swift; sourceTree = "<group>"; };
+		A20000000000000000000024 /* ProjectPathResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectPathResolver.swift; sourceTree = "<group>"; };
+		A20000000000000000000025 /* RemoteDirectoryCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteDirectoryCatalog.swift; sourceTree = "<group>"; };
 		A20000000000000000000017 /* TerminalURLHandler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalURLHandler.swift; sourceTree = "<group>"; };
 		A20000000000000000000018 /* TerminalInput.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalInput.swift; sourceTree = "<group>"; };
 		A20000000000000000000019 /* TerminalURLPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalURLPresentation.swift; sourceTree = "<group>"; };
@@ -107,6 +112,7 @@
 		B20000000000000000000007 /* ActiveThreadSearchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActiveThreadSearchTests.swift; sourceTree = "<group>"; };
 		B20000000000000000000008 /* TerminalTabNamingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalTabNamingTests.swift; sourceTree = "<group>"; };
 		B20000000000000000000009 /* DesktopRemoteThreadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DesktopRemoteThreadTests.swift; sourceTree = "<group>"; };
+		B20000000000000000000010 /* ProjectPathResolverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectPathResolverTests.swift; sourceTree = "<group>"; };
 		C20000000000000000000001 /* FissionDesktopUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FissionDesktopUITests.swift; sourceTree = "<group>"; };
 		C20000000000000000000003 /* TerminalSearchUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalSearchUITests.swift; sourceTree = "<group>"; };
 		C20000000000000000000004 /* TerminalTabsUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TerminalTabsUITests.swift; sourceTree = "<group>"; };
@@ -211,6 +217,8 @@
 				A20000000000000000000021 /* ActiveThreadPicker.swift */,
 				A20000000000000000000002 /* ThreadListView.swift */,
 				A20000000000000000000007 /* NewThreadSheet.swift */,
+				A20000000000000000000024 /* ProjectPathResolver.swift */,
+				A20000000000000000000025 /* RemoteDirectoryCatalog.swift */,
 				A20000000000000000000009 /* ThreadHeaderTitle.swift */,
 				A20000000000000000000010 /* DesktopThreadCreator.swift */,
 			);
@@ -281,6 +289,7 @@
 				B20000000000000000000006 /* TerminalInputContentTests.swift */,
 				B20000000000000000000008 /* TerminalTabNamingTests.swift */,
 				B20000000000000000000009 /* DesktopRemoteThreadTests.swift */,
+				B20000000000000000000010 /* ProjectPathResolverTests.swift */,
 			);
 			path = Tests;
 			sourceTree = "<group>";
@@ -456,6 +465,8 @@
 				A10000000000000000000022 /* TerminalTabNaming.swift in Sources */,
 				A10000000000000000000020 /* TerminalSearch.swift in Sources */,
 				A10000000000000000000007 /* NewThreadSheet.swift in Sources */,
+				A10000000000000000000024 /* ProjectPathResolver.swift in Sources */,
+				A10000000000000000000025 /* RemoteDirectoryCatalog.swift in Sources */,
 				A10000000000000000000008 /* HoverFeedback.swift in Sources */,
 				A10000000000000000000009 /* ThreadHeaderTitle.swift in Sources */,
 				A10000000000000000000010 /* DesktopThreadCreator.swift in Sources */,
@@ -485,6 +496,7 @@
 				B10000000000000000000006 /* TerminalInputContentTests.swift in Sources */,
 				B10000000000000000000008 /* TerminalTabNamingTests.swift in Sources */,
 				B10000000000000000000009 /* DesktopRemoteThreadTests.swift in Sources */,
+				B10000000000000000000010 /* ProjectPathResolverTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -84,6 +84,7 @@ struct ThreadListView: View {
         .sheet(isPresented: $isCreatingThread) {
             NewThreadSheet(
                 recentPaths: recentProjectPaths,
+                recentRemotePathsByMachine: recentRemotePathsByMachine,
                 machines: remoteMachineStore.machines,
                 create: createThread(_:),
                 cancel: { isCreatingThread = false }
@@ -268,6 +269,27 @@ struct ThreadListView: View {
             selectedThreadID: selectedThreadID,
             isAppActive: scenePhase == .active
         )
+    }
+
+    private var recentRemotePathsByMachine: [UUID: [String]] {
+        var pathsByMachine: [UUID: [String]] = [:]
+        for machine in remoteMachineStore.machines {
+            var paths: [String] = []
+            if let projectPath = machine.projectPath {
+                paths.append(projectPath)
+            }
+            pathsByMachine[machine.id] = paths
+        }
+        for thread in model.threads {
+            guard let machineID = thread.remoteMachineID,
+                  let path = thread.workingDirectory else { continue }
+            var paths = pathsByMachine[machineID] ?? []
+            if !paths.contains(path) {
+                paths.append(path)
+            }
+            pathsByMachine[machineID] = paths
+        }
+        return pathsByMachine
     }
 
     private var activeThreads: [AgentThread] {
