@@ -49,15 +49,25 @@ struct ProjectPathQueryTests {
             ProjectPathQuery.pickerPaths(
                 directory: "/work/fission",
                 namePrefix: "",
-                childNames: ["src", "Packages"]
+                childNames: ["src", "Packages"],
+                includeCurrentDirectory: true
             ) == ["/work/fission", "/work/fission/Packages", "/work/fission/src"]
         )
         #expect(
             ProjectPathQuery.pickerPaths(
                 directory: "~",
                 namePrefix: "",
-                childNames: ["src", "work"]
+                childNames: ["src", "work"],
+                includeCurrentDirectory: true
             ) == ["~/src", "~/work"]
+        )
+        #expect(
+            ProjectPathQuery.pickerPaths(
+                directory: "/missing",
+                namePrefix: "",
+                childNames: [],
+                includeCurrentDirectory: false
+            ).isEmpty
         )
     }
 
@@ -163,5 +173,14 @@ struct SSHDirectoryListingTests {
         )
         #expect(map?["/work"] == ["fission", "notes"])
         #expect(map?["~/src"] == ["app"])
+    }
+
+    @Test func listingResultDistinguishesMissingAndFailedPaths() {
+        #expect(
+            SSHDirectoryListing.result(status: 0, output: "src\nlib\n")
+                == .contents(["lib", "src"])
+        )
+        #expect(SSHDirectoryListing.result(status: 2, output: "") == .missing)
+        #expect(SSHDirectoryListing.result(status: 255, output: "") == .failed)
     }
 }

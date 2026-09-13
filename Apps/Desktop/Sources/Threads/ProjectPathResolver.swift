@@ -72,7 +72,7 @@ enum ProjectPathResolver {
             includingPropertiesForKeys: [.isDirectoryKey, .isHiddenKey],
             options: [.skipsHiddenFiles]
         ) else {
-            return namePrefix.isEmpty ? [ProjectPath(url: listedURL)] : []
+            return []
         }
 
         let names = urls.compactMap { url -> String? in
@@ -84,7 +84,8 @@ enum ProjectPathResolver {
         return ProjectPathQuery.pickerPaths(
             directory: listedURL.path,
             namePrefix: namePrefix,
-            childNames: names
+            childNames: names,
+            includeCurrentDirectory: true
         ).map { ProjectPath(url: URL(fileURLWithPath: $0)) }
     }
 
@@ -103,41 +104,18 @@ enum RemoteProjectPathResolver {
     static func projects(
         directory: String,
         namePrefix: String,
-        childNames: [String]?,
-        typedQuery: String,
-        recentPaths: [String]
+        listing: RemoteDirectoryListing?
     ) -> [ProjectPath] {
-        if let childNames {
-            let listed = ProjectPathQuery.pickerPaths(
-                directory: directory,
-                namePrefix: namePrefix,
-                childNames: childNames
-            ).map { ProjectPath(path: $0) }
-            if !listed.isEmpty {
-                return listed
-            }
+        guard case let .contents(childNames) = listing else {
+            return []
         }
 
-        if namePrefix.isEmpty, let current = typedPathCandidate(directory) {
-            return [current]
-        }
-
-        if let typed = typedPathCandidate(typedQuery) {
-            return [typed]
-        }
-
-        return ProjectPathQuery.recentProjects(recentPaths, matching: typedQuery)
-            .map { ProjectPath(path: $0) }
-    }
-
-    static func typedPathCandidate(_ query: String) -> ProjectPath? {
-        guard let path = RemoteMachine.normalizedProjectPath(query),
-              path != "/",
-              path != "~",
-              path != "." else {
-            return nil
-        }
-        return ProjectPath(path: path)
+        return ProjectPathQuery.pickerPaths(
+            directory: directory,
+            namePrefix: namePrefix,
+            childNames: childNames,
+            includeCurrentDirectory: true
+        ).map { ProjectPath(path: $0) }
     }
 }
 

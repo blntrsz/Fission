@@ -8,9 +8,7 @@ struct ProjectPathResolverTests {
         let projects = RemoteProjectPathResolver.projects(
             directory: "/work",
             namePrefix: "fi",
-            childNames: ["fission", "notes", "other"],
-            typedQuery: "/work/fi",
-            recentPaths: ["/work/fission"]
+            listing: .contents(["fission", "notes", "other"])
         )
 
         #expect(projects.map(\.path) == ["/work/fission"])
@@ -21,9 +19,7 @@ struct ProjectPathResolverTests {
         let projects = RemoteProjectPathResolver.projects(
             directory: "~/src",
             namePrefix: "",
-            childNames: ["app", "lib"],
-            typedQuery: "~/src/",
-            recentPaths: []
+            listing: .contents(["app", "lib"])
         )
 
         #expect(projects.map(\.path) == ["~/src", "~/src/app", "~/src/lib"])
@@ -33,9 +29,7 @@ struct ProjectPathResolverTests {
         let projects = RemoteProjectPathResolver.projects(
             directory: "/work/fission",
             namePrefix: "",
-            childNames: ["src", "Packages"],
-            typedQuery: "/work/fission",
-            recentPaths: []
+            listing: .contents(["src", "Packages"])
         )
 
         #expect(projects.map(\.path) == [
@@ -45,25 +39,35 @@ struct ProjectPathResolverTests {
         ])
     }
 
-    @Test func remoteFallsBackToTypedPathWhenListingIsEmpty() {
-        let projects = RemoteProjectPathResolver.projects(
-            directory: "/work",
-            namePrefix: "fission",
-            childNames: [],
-            typedQuery: "/work/fission",
-            recentPaths: []
+    @Test func remoteMissingOrUnknownPathsCannotBePicked() {
+        #expect(
+            RemoteProjectPathResolver.projects(
+                directory: "/nope",
+                namePrefix: "",
+                listing: .missing
+            ).isEmpty
         )
-
-        #expect(projects.map(\.path) == ["/work/fission"])
+        #expect(
+            RemoteProjectPathResolver.projects(
+                directory: "/work",
+                namePrefix: "zzz",
+                listing: .contents(["fission", "notes"])
+            ).isEmpty
+        )
+        #expect(
+            RemoteProjectPathResolver.projects(
+                directory: "/work",
+                namePrefix: "fi",
+                listing: nil
+            ).isEmpty
+        )
     }
 
     @Test func remoteHomeListingUsesAvailableDirectories() {
         let projects = RemoteProjectPathResolver.projects(
             directory: "~",
             namePrefix: "s",
-            childNames: ["src", "work"],
-            typedQuery: "src",
-            recentPaths: []
+            listing: .contents(["src", "work"])
         )
 
         #expect(projects.map(\.path) == ["~/src"])
@@ -77,7 +81,9 @@ struct RemoteDirectoryCatalogTests {
         ])
         let machine = RemoteMachine(name: "Studio", username: "ada", host: "gpu.example")
 
-        let names = await catalog.childDirectories(on: machine, in: "/work/")
-        #expect(names == ["fission", "notes"])
+        let found = await catalog.listing(on: machine, in: "/work/")
+        #expect(found == .contents(["fission", "notes"]))
+        let missing = await catalog.listing(on: machine, in: "/nope")
+        #expect(missing == .missing)
     }
 }

@@ -2,7 +2,7 @@ import FissionCore
 import Foundation
 
 protocol RemoteDirectoryCatalog: Sendable {
-    func childDirectories(on machine: RemoteMachine, in directory: String) async -> [String]
+    func listing(on machine: RemoteMachine, in directory: String) async -> RemoteDirectoryListing
 }
 
 enum RemoteDirectoryCatalogs {
@@ -18,21 +18,27 @@ enum RemoteDirectoryCatalogs {
 struct MapRemoteDirectoryCatalog: RemoteDirectoryCatalog {
     let directories: [String: [String]]
 
-    func childDirectories(on machine: RemoteMachine, in directory: String) async -> [String] {
+    func listing(on machine: RemoteMachine, in directory: String) async -> RemoteDirectoryListing {
         let key = ProjectPathQuery.stripTrailingSlashes(directory)
-        return directories[key] ?? directories[directory] ?? []
+        if let names = directories[key] ?? directories[directory] {
+            return .contents(names)
+        }
+        return .missing
     }
 }
 
 struct SSHRemoteDirectoryCatalog: RemoteDirectoryCatalog {
-    func childDirectories(on machine: RemoteMachine, in directory: String) async -> [String] {
+    func listing(on machine: RemoteMachine, in directory: String) async -> RemoteDirectoryListing {
         await Task.detached(priority: .userInitiated) {
             Self.listSynchronously(machine: machine, directory: directory)
         }.value
     }
 
-    static func listSynchronously(machine: RemoteMachine, directory: String) -> [String] {
-        guard machine.isValid else { return [] }
+    static func listSynchronously(
+        machine: RemoteMachine,
+        directory: String
+    ) -> RemoteDirectoryListing {
+        guard machine.isValid else { return .failed }
 
         let process = Process()
         let output = Pipe()
@@ -52,17 +58,19 @@ struct SSHRemoteDirectoryCatalog: RemoteDirectoryCatalog {
             try process.run()
         } catch {
             group.leave()
-            return []
+            return .failed
         }
 
         if group.wait(timeout: .now() + 6) == .timedOut {
             process.terminate()
             process.waitUntilExit()
-            return []
+            return .failed
         }
 
         let data = output.fileHandleForReading.readDataToEndOfFile()
-        guard process.terminationStatus == 0 else { return [] }
-        return SSHDirectoryListing.parseOutput(String(bytes: data, encoding: .utf8) ?? "")
+        return SSHDirectoryListing.result(
+            status: process.terminationStatus,
+            output: String(bytes: data, encoding: .utf8) ?? ""
+        )
     }
 }
