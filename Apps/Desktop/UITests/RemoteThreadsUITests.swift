@@ -52,12 +52,11 @@ extension FissionDesktopUITests {
             app.radioButtons["Remote"].click()
         }
 
-        let machine = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "remote-machine-")).firstMatch
         XCTAssertTrue(
-            machine.waitForExistence(timeout: 5),
+            app.popUpButtons["remote-machine-picker"].waitForExistence(timeout: 5)
+                || app.descendants(matching: .any)["remote-machine-picker"].waitForExistence(timeout: 5),
             "Registered machines should appear in the New Thread sheet."
         )
-        machine.click()
 
         let projectPath = app.textFields["remote-project-path-field"]
         XCTAssertTrue(projectPath.waitForExistence(timeout: 5))
@@ -135,5 +134,47 @@ extension FissionDesktopUITests {
         XCTAssertTrue(app.staticTexts["Studio"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["gpu.example"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["/work/fission"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor
+    func testRemoteProjectPickerAutocompletesDirectories() throws {
+        continueAfterFailure = false
+
+        let context = try launchIsolatedApp(withRemoteMachine: true)
+        let app = context.app
+        defer {
+            app.terminate()
+            try? FileManager.default.removeItem(at: context.root)
+        }
+
+        XCTAssertTrue(app.staticTexts["Explore Fission"].waitForExistence(timeout: 10))
+        app.buttons["new-thread-button"].click()
+
+        let remoteSegment = app.descendants(matching: .any)["new-thread-location-remote"]
+        if remoteSegment.waitForExistence(timeout: 2) {
+            remoteSegment.click()
+        } else {
+            app.radioButtons["Remote"].click()
+        }
+
+        let projectPath = app.textFields["remote-project-path-field"]
+        XCTAssertTrue(projectPath.waitForExistence(timeout: 5))
+        XCTAssertEqual(projectPath.value as? String, "/work/fission")
+        XCTAssertTrue(
+            app.descendants(matching: .any)["new-thread-project-fission"].waitForExistence(timeout: 5),
+            "The remote picker should list the matching project directory."
+        )
+
+        if app.buttons["Clear"].waitForExistence(timeout: 2) {
+            app.buttons["Clear"].click()
+        }
+        projectPath.click()
+        projectPath.typeText("/work/")
+
+        XCTAssertTrue(app.descendants(matching: .any)["new-thread-project-notes"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.descendants(matching: .any)["new-thread-project-fission"].exists)
+
+        app.descendants(matching: .any)["new-thread-project-notes"].firstMatch.doubleClick()
+        XCTAssertEqual(projectPath.value as? String, "/work/notes/")
     }
 }

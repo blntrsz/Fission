@@ -391,6 +391,11 @@ extension FissionDesktopUITests {
             .appending(path: ".pi/agent", directoryHint: .isDirectory)
             .path
         app.launchEnvironment["FISSION_EXECUTION_EPHEMERAL"] = "1"
+        if withRemoteMachine {
+            app.launchEnvironment["FISSION_REMOTE_DIRECTORY_LISTING"] = """
+            {"/work":["fission","notes"],"/":["work","tmp"]}
+            """
+        }
         if withInterruptProbe || withSearchFixture {
             app.launchEnvironment["SHELL"] = "/bin/zsh"
             app.launchEnvironment["ZDOTDIR"] = root.path

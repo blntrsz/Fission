@@ -10,7 +10,9 @@ enum NewThreadRequest: Equatable {
 
 struct NewThreadSheet: View {
     let recentPaths: [String]
+    let recentRemotePathsByMachine: [UUID: [String]]
     let machines: [RemoteMachine]
+    let remoteDirectoryCatalog: any RemoteDirectoryCatalog
     let create: (NewThreadRequest) -> Void
     let cancel: () -> Void
 
@@ -18,17 +20,36 @@ struct NewThreadSheet: View {
     @State private var selectedIndex = 0
     @State private var selectedMachineID: UUID?
     @State private var remoteProjectPath = ""
+    @State private var remoteChildNamesByDirectory: [String: [String]] = [:]
     @AppStorage("createThreadsInNewWorktree") private var createInNewWorktree = false
     @AppStorage("newThreadLocation") private var locationRaw = NewThreadLocation.local.rawValue
     @FocusState private var focusedField: Field?
+
+    init(
+        recentPaths: [String],
+        recentRemotePathsByMachine: [UUID: [String]] = [:],
+        machines: [RemoteMachine],
+        remoteDirectoryCatalog: any RemoteDirectoryCatalog = RemoteDirectoryCatalogs.make(),
+        create: @escaping (NewThreadRequest) -> Void,
+        cancel: @escaping () -> Void
+    ) {
+        self.recentPaths = recentPaths
+        self.recentRemotePathsByMachine = recentRemotePathsByMachine
+        self.machines = machines
+        self.remoteDirectoryCatalog = remoteDirectoryCatalog
+        self.create = create
+        self.cancel = cancel
+    }
 
     var body: some View {
         VStack(spacing: 0) {
             header
             if location == .local {
                 projectList
+            } else if machines.isEmpty {
+                remoteEmptyList
             } else {
-                remoteList
+                remoteProjectPicker
             }
             footer
         }
@@ -44,8 +65,12 @@ struct NewThreadSheet: View {
         .onChange(of: query) { _, _ in
             selectedIndex = projects.isEmpty ? -1 : 0
         }
+        .onChange(of: remoteProjectPath) { _, _ in
+            selectedIndex = projects.isEmpty ? -1 : 0
+        }
         .onChange(of: location) { _, location in
             focusedField = location == .local ? .project : .remotePath
+            selectedIndex = projects.isEmpty ? -1 : 0
         }
         .onChange(of: selectedMachineID) { previousID, _ in
             let previousPath = machines.first { $0.id == previousID }?.projectPath ?? ""
@@ -53,6 +78,10 @@ struct NewThreadSheet: View {
             if typedPath.isEmpty || typedPath == previousPath {
                 fillRemoteProjectPath(from: selectedMachine)
             }
+            selectedIndex = projects.isEmpty ? -1 : 0
+        }
+        .task(id: remoteListingID) {
+            await loadRemoteListing()
         }
         .onKeyPress(.upArrow) {
             moveSelection(by: -1)
@@ -68,7 +97,9 @@ struct NewThreadSheet: View {
             return .handled
         }
         .onKeyPress(.tab) {
-            guard location == .local, focusedField == .project else { return .ignored }
+            guard focusedField == (location == .local ? .project : .remotePath) else {
+                return .ignored
+            }
             completeSelectedProject()
             return .handled
         }
@@ -127,8 +158,8 @@ struct NewThreadSheet: View {
             } else {
                 field(
                     title: "Project folder",
-                    systemImage: "folder",
-                    placeholder: "~/src/project or /absolute/path",
+                    systemImage: "magnifyingglass",
+                    placeholder: "Search projects or enter ./, ~/, or /",
                     text: $remoteProjectPath,
                     focus: .remotePath,
                     accessibilityIdentifier: "remote-project-path-field"
@@ -180,9 +211,41 @@ struct NewThreadSheet: View {
         }
     }
 
-    private var projectList: some View {
+    private var remoteProjectPicker: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(query.isEmpty ? "Recent Projects" : "Projects")
+            machineChooser
+            projectListContent
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var machineChooser: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Machine")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 24)
+
+            Picker("Machine", selection: $selectedMachineID) {
+                ForEach(machines) { machine in
+                    Text(machine.displayName)
+                        .tag(Optional(machine.id))
+                }
+            }
+            .pickerStyle(.menu)
+            .padding(.horizontal, 24)
+            .accessibilityIdentifier("remote-machine-picker")
+        }
+    }
+
+    private var projectList: some View {
+        projectListContent
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var projectListContent: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(projectSearch.isEmpty ? "Recent Projects" : "Projects")
                 .font(.headline)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 24)
@@ -204,7 +267,7 @@ struct NewThreadSheet: View {
                             }
                         }
                         .padding(.horizontal, 14)
-                        .id(query)
+                        .id(projectSearch)
                     }
                     .onChange(of: selectedIndex) { _, index in
                         withAnimation(.easeOut(duration: 0.1)) {
@@ -214,7 +277,7 @@ struct NewThreadSheet: View {
                 }
             }
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityIdentifier("new-thread-project-list")
     }
 
     private func projectRow(_ project: ProjectPath, at index: Int) -> some View {
@@ -249,11 +312,11 @@ struct NewThreadSheet: View {
             )
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("new-thread-project-\(project.name)")
         .simultaneousGesture(
             TapGesture(count: 2).onEnded {
                 selectedIndex = index
-                query = inputPath(for: project.url)
-                focusedField = .project
+                completeSelectedProject()
             }
         )
     }
@@ -287,86 +350,27 @@ struct NewThreadSheet: View {
         .background(.bar)
     }
 
-    private var remoteList: some View {
+    private var remoteEmptyList: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Machines")
                 .font(.headline)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 24)
 
-            if machines.isEmpty {
-                ContentUnavailableView {
-                    Label("No Remote Machines", systemImage: "network")
-                } description: {
-                    Text("Add a host in Settings, then open it as a remote Thread.")
-                } actions: {
-                    SettingsLink {
-                        Label("Open Settings", systemImage: "gearshape")
-                    }
-                    .accessibilityIdentifier("open-remote-machine-settings")
+            ContentUnavailableView {
+                Label("No Remote Machines", systemImage: "network")
+            } description: {
+                Text("Add a host in Settings, then open it as a remote Thread.")
+            } actions: {
+                SettingsLink {
+                    Label("Open Settings", systemImage: "gearshape")
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-            } else {
-                ScrollView {
-                    LazyVStack(spacing: 4) {
-                        ForEach(machines) { machine in
-                            remoteRow(machine)
-                        }
-                    }
-                    .padding(.horizontal, 14)
-                }
+                .accessibilityIdentifier("open-remote-machine-settings")
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .accessibilityIdentifier("remote-machine-list")
-    }
-
-    private func remoteRow(_ machine: RemoteMachine) -> some View {
-        Button {
-            selectedMachineID = machine.id
-        } label: {
-            HStack(spacing: 14) {
-                Image(systemName: "network")
-                    .font(.title2)
-                    .foregroundStyle(.secondary)
-
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(machine.displayName)
-                        .font(.title3)
-                        .foregroundStyle(.primary)
-                        .lineLimit(1)
-                    Text(machine.target)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                    if let projectPath = machine.projectPath {
-                        Text(projectPath)
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                    }
-                }
-
-                Spacer()
-            }
-            .padding(.horizontal, 16)
-            .frame(height: 76)
-            .contentShape(Rectangle())
-            .background(
-                selectedMachineID == machine.id ? Color.accentColor.opacity(0.18) : Color.clear,
-                in: RoundedRectangle(cornerRadius: 10)
-            )
-        }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("remote-machine-\(machine.id.uuidString)")
-        .simultaneousGesture(
-            TapGesture(count: 2).onEnded {
-                selectedMachineID = machine.id
-                createSelected()
-            }
-        )
     }
 
     private var locationBinding: Binding<NewThreadLocation> {
@@ -376,8 +380,52 @@ struct NewThreadSheet: View {
         )
     }
 
+    private var projectSearch: String {
+        location == .local ? query : remoteProjectPath
+    }
+
+    private var recentRemotePaths: [String] {
+        guard let id = selectedMachine?.id else { return [] }
+        var paths = recentRemotePathsByMachine[id] ?? []
+        if let projectPath = selectedMachine?.projectPath {
+            paths.insert(projectPath, at: 0)
+        }
+        return paths
+    }
+
     private var projects: [ProjectPath] {
-        ProjectPathResolver.projects(matching: query, recentPaths: recentPaths)
+        switch location {
+        case .local:
+            ProjectPathResolver.projects(matching: query, recentPaths: recentPaths)
+        case .remote:
+            RemoteProjectPathResolver.projects(
+                matching: remoteProjectPath,
+                recentPaths: recentRemotePaths,
+                childNames: cachedRemoteChildNames,
+                relativeBase: selectedMachine?.projectPath ?? recentRemotePaths.first
+            )
+        }
+    }
+
+    private var cachedRemoteChildNames: [String]? {
+        guard let key = remoteListingCacheKey else { return nil }
+        return remoteChildNamesByDirectory[key]
+    }
+
+    private var remoteListingID: String {
+        remoteListingCacheKey ?? ""
+    }
+
+    private var remoteListingCacheKey: String? {
+        guard location == .remote, let machine = selectedMachine else { return nil }
+        let trimmed = remoteProjectPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let target = ProjectPathQuery.listingTarget(
+            query: trimmed,
+            relativeBase: machine.projectPath ?? recentRemotePaths.first
+        ) else {
+            return nil
+        }
+        return "\(machine.id.uuidString)\n\(target.directory)"
     }
 
     private var canCreate: Bool {
@@ -385,8 +433,17 @@ struct NewThreadSheet: View {
         case .local:
             !projects.isEmpty
         case .remote:
-            selectedMachine != nil && RemoteMachine.normalizedProjectPath(remoteProjectPath) != nil
+            selectedMachine != nil
+                && (
+                    selectedRemoteProjectPath != nil
+                        || RemoteMachine.normalizedProjectPath(remoteProjectPath) != nil
+                )
         }
+    }
+
+    private var selectedRemoteProjectPath: String? {
+        guard projects.indices.contains(selectedIndex) else { return nil }
+        return RemoteMachine.normalizedProjectPath(projects[selectedIndex].path)
     }
 
     private var selectedMachine: RemoteMachine? {
@@ -394,45 +451,31 @@ struct NewThreadSheet: View {
     }
 
     private func moveSelection(by offset: Int) {
-        switch location {
-        case .local:
-            guard !projects.isEmpty else { return }
-            selectedIndex = min(max(selectedIndex + offset, 0), projects.count - 1)
-        case .remote:
-            guard !machines.isEmpty else { return }
-            let current = machines.firstIndex { $0.id == selectedMachineID } ?? 0
-            let next = min(max(current + offset, 0), machines.count - 1)
-            selectedMachineID = machines[next].id
-        }
+        guard !projects.isEmpty else { return }
+        selectedIndex = min(max(selectedIndex + offset, 0), projects.count - 1)
     }
 
     private func completeSelectedProject() {
         guard projects.indices.contains(selectedIndex) else { return }
-        query = inputPath(for: projects[selectedIndex].url)
-        focusedField = .project
-    }
-
-    private func inputPath(for url: URL) -> String {
-        let path = url.standardizedFileURL.path
-        let homePath = FileManager.default.homeDirectoryForCurrentUser.path
-
-        if query.hasPrefix("./") {
-            let basePath = URL(
-                fileURLWithPath: recentPaths.first ?? homePath
-            ).standardizedFileURL.path
-            if path == basePath {
-                return "./"
-            }
-            if path.hasPrefix(basePath + "/") {
-                return "./" + path.dropFirst(basePath.count + 1) + "/"
-            }
+        let path = projects[selectedIndex].path
+        switch location {
+        case .local:
+            query = ProjectPathQuery.completedInput(
+                query: query,
+                path: path,
+                homePath: FileManager.default.homeDirectoryForCurrentUser.path,
+                relativeBase: recentPaths.first
+            )
+            focusedField = .project
+        case .remote:
+            remoteProjectPath = ProjectPathQuery.completedInput(
+                query: remoteProjectPath,
+                path: path,
+                homePath: nil,
+                relativeBase: selectedMachine?.projectPath ?? recentRemotePaths.first
+            )
+            focusedField = .remotePath
         }
-
-        if query.hasPrefix("~/") || (!query.hasPrefix("/") && path.hasPrefix(homePath + "/")) {
-            return "~" + path.dropFirst(homePath.count) + "/"
-        }
-
-        return path.hasSuffix("/") ? path : path + "/"
     }
 
     private func createSelected() {
@@ -441,16 +484,33 @@ struct NewThreadSheet: View {
             guard projects.indices.contains(selectedIndex) else { return }
             create(.local(projects[selectedIndex].url, createWorktree: createInNewWorktree))
         case .remote:
-            guard let selectedMachine,
-                  let projectPath = RemoteMachine.normalizedProjectPath(remoteProjectPath) else {
-                return
-            }
+            guard let selectedMachine else { return }
+            let projectPath = selectedRemoteProjectPath
+                ?? RemoteMachine.normalizedProjectPath(remoteProjectPath)
+            guard let projectPath else { return }
             create(.remote(selectedMachine, projectPath: projectPath))
         }
     }
 
     private func fillRemoteProjectPath(from machine: RemoteMachine?) {
         remoteProjectPath = machine?.projectPath ?? ""
+    }
+
+    private func loadRemoteListing() async {
+        guard location == .remote,
+              let machine = selectedMachine,
+              let key = remoteListingCacheKey else {
+            return
+        }
+        if remoteChildNamesByDirectory[key] != nil { return }
+        let directory = String(key.split(separator: "\n", maxSplits: 1).last ?? "")
+        guard !directory.isEmpty else { return }
+        try? await Task.sleep(for: .milliseconds(120))
+        guard !Task.isCancelled else { return }
+        let names = await remoteDirectoryCatalog.childDirectories(on: machine, in: directory)
+        guard !Task.isCancelled else { return }
+        remoteChildNamesByDirectory[key] = names
+        selectedIndex = 0
     }
 }
 
@@ -462,110 +522,4 @@ private enum Field: Hashable {
 private enum NewThreadLocation: String {
     case local
     case remote
-}
-
-private struct ProjectPath: Identifiable {
-    let url: URL
-
-    var id: String { url.path }
-    var name: String { url.lastPathComponent.isEmpty ? url.path : url.lastPathComponent }
-
-    var displayPath: String {
-        let home = FileManager.default.homeDirectoryForCurrentUser.path
-        guard url.path.hasPrefix(home) else { return url.path }
-        return "~" + url.path.dropFirst(home.count)
-    }
-}
-
-private enum ProjectPathResolver {
-    static func projects(matching query: String, recentPaths: [String]) -> [ProjectPath] {
-        let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard isPathQuery(trimmedQuery) else {
-            return recentProjects(recentPaths, matching: trimmedQuery)
-        }
-
-        let expandedPath = expand(trimmedQuery, recentPaths: recentPaths)
-        let endsWithSlash = trimmedQuery.hasSuffix("/")
-        let candidateURL = URL(fileURLWithPath: expandedPath).standardizedFileURL
-        let directoryURL = endsWithSlash ? candidateURL : candidateURL.deletingLastPathComponent()
-        let namePrefix = endsWithSlash ? "" : candidateURL.lastPathComponent
-
-        guard let urls = try? FileManager.default.contentsOfDirectory(
-            at: directoryURL,
-            includingPropertiesForKeys: [.isDirectoryKey, .isHiddenKey],
-            options: [.skipsHiddenFiles]
-        ) else {
-            return []
-        }
-
-        return urls
-            .filter { url in
-                let values = try? url.resourceValues(forKeys: [.isDirectoryKey, .isHiddenKey])
-                return values?.isDirectory == true
-                    && values?.isHidden != true
-                    && (namePrefix.isEmpty
-                        || url.lastPathComponent.range(
-                            of: namePrefix,
-                            options: [.caseInsensitive, .anchored]
-                        ) != nil)
-            }
-            .sorted {
-                $0.lastPathComponent.localizedCaseInsensitiveCompare($1.lastPathComponent)
-                    == .orderedAscending
-            }
-            .prefix(50)
-            .map(ProjectPath.init)
-    }
-
-    private static func recentProjects(_ paths: [String], matching query: String) -> [ProjectPath] {
-        paths
-            .map { URL(fileURLWithPath: $0).standardizedFileURL }
-            .filter { url in
-                var isDirectory: ObjCBool = false
-                let exists = FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory)
-                let matches = query.isEmpty
-                    || url.lastPathComponent.localizedCaseInsensitiveContains(query)
-                    || url.path.localizedCaseInsensitiveContains(query)
-                return exists && isDirectory.boolValue && matches
-            }
-            .map(ProjectPath.init)
-    }
-
-    private static func isPathQuery(_ query: String) -> Bool {
-        query.hasPrefix("./") || query.hasPrefix("~/") || query.hasPrefix("/")
-    }
-
-    private static func expand(_ path: String, recentPaths: [String]) -> String {
-        if path.hasPrefix("./") {
-            let basePath = recentPaths.first ?? FileManager.default.homeDirectoryForCurrentUser.path
-            return URL(fileURLWithPath: basePath)
-                .appending(path: String(path.dropFirst(2)))
-                .path
-        }
-        return NSString(string: path).expandingTildeInPath
-    }
-}
-
-enum RecentProjectPaths {
-    private static let key = "recentProjectPaths"
-    private static let limit = 9
-
-    static func load() -> [String] {
-        let saved = UserDefaults.standard.stringArray(forKey: key) ?? []
-        if saved.isEmpty {
-            let home = FileManager.default.homeDirectoryForCurrentUser
-            let projects = home.appending(path: "Projects")
-            return FileManager.default.fileExists(atPath: projects.path)
-                ? [projects.path, home.path]
-                : [home.path]
-        }
-        return saved
-    }
-
-    static func record(_ url: URL) {
-        let path = url.standardizedFileURL.path
-        var paths = load().filter { $0 != path }
-        paths.insert(path, at: 0)
-        UserDefaults.standard.set(Array(paths.prefix(limit)), forKey: key)
-    }
 }
