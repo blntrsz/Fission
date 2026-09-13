@@ -9,7 +9,7 @@
 
 **Delete the worktree feature.** Isolation becomes an APFS copy-on-write clone of the live project directory, owned by Fission Desktop. Do not vendor Rift. Do not keep `git worktree` as a fallback, hybrid, or labeled option.
 
-Engine: `copyfile(3)` with `COPYFILE_RECURSIVE | COPYFILE_CLONE` (not directory `clonefile(2)`, not Rift, not `git worktree add --reflink`). Storage: sibling of the project root, same volume. Git after clone: independent cloned `.git`, then `git switch -c fission-<id>` with no reset. Copy everything, including `node_modules`. Delete the clone when the Thread is settled. If the volume cannot clone, error — do not silently check out a clean tree.
+Engine: `copyfile(3)` with `COPYFILE_RECURSIVE | COPYFILE_CLONE` (not directory `clonefile(2)`, not Rift, not `git worktree add --reflink`). Storage: `~/.fission/worktrees/<repo>/fission-<id>/<repo>/` so the leaf folder is still the repo name. Git after clone: independent cloned `.git`, then `git switch -c fission-<id>` with no reset. Copy everything, including `node_modules`. Delete the clone when the Thread is settled. If the volume cannot clone, error — do not silently check out a clean tree.
 
 Rift is the right *idea* (dirty snapshot in <0.1s, deps CoW-shared until write). It is the wrong *binary*: experimental `0.0.10`, mutates the source via `init`, directory `clonefile`, detached HEAD, hooks, refuse-linked-worktrees, Bun/Node FFI, open trash/registry bugs. Reimplement the APFS path in Swift and bind lifecycle to Thread.
 
@@ -21,13 +21,13 @@ Rift is the right *idea* (dirty snapshot in <0.1s, deps CoW-shared until write).
 | Worktree fallback | **None.** Fail if not APFS / cross-volume / clone fails | A fallback would reintroduce clean-HEAD checkouts and Git-only isolation — the thing we are deleting |
 | Reflink-worktree hybrid | **No** | Still a worktree: shared gitdir, clean or half-dirty tree, `node_modules` missing |
 | What gets copied | **All files** (dirty, untracked, ignored, deps) | CoW makes this cheap; skipping artifacts recreates the worktree "agent must install" tax |
-| Where it lives | `<projectParent>/.fission/<project>/<thread-id>/` | Must be same volume as source or CoW is a lie; `~/.fission/worktrees` breaks for external disks |
+| Where it lives | `~/.fission/worktrees/<repo>/fission-<id>/<repo>/` | Same home root as today. Extra `<repo>/` leaf so the folder name stays the repo name (not `fission-<id>`). CoW still requires that volume = project volume; else fail |
 | Git after clone | `git switch -c fission-<id>` on the **clone only** | Independent repo (not a worktree). Unique branch so agents can push/PR without moving source `main`. Working tree stays dirty |
 | Linked Git worktree as source | **Refuse** | `.git` is a `gitdir:` file; cloning it shares the source index |
 | Non-git folders | **Allowed** | CoW does not need Git; title falls back to `"local"` / folder name as today |
 | Isolate vs in-place | Keep the toggle, rename off "worktree", **default on** | Instant CoW removes the reason to default off; in-place remains for "agent, edit this folder" |
 | Settle | **Delete the isolate directory** | Clones are Thread-owned. Reopen before settle keeps the files. No `git worktree remove` |
-| Orphan `~/.fission/worktrees` | Leave on disk; do not auto-`worktree remove` in v1 | Separate cleanup. New creates never write there |
+| Old worktree dirs | `~/.fission/worktrees/<repo>/fission-<id>/` (no inner `<repo>/`) | Leave; new clones use the inner `<repo>/` leaf |
 | UI copy | "New isolated workspace" (or "Isolate") | Stop saying worktree |
 
 ## Compact decision matrix
@@ -178,8 +178,8 @@ create Thread
   if isolate on
     root = git toplevel or selected folder
     refuse if root/.git is a file          # linked worktree
-    dest = <parent>/.fission/<name>/<thread-id>/
-    probe same APFS volume + clonefile of a temp file
+    dest = ~/.fission/worktrees/<repo>/fission-<id>/<repo>/
+    probe dest's volume == root's volume and clonefile of a temp file
     copyfile(root, dest, RECURSIVE|CLONE)
     if dest/.git is a dir → git switch -c fission-<id>
     cwd = dest + relative subpath
@@ -193,7 +193,14 @@ settle Thread
 
 Probe CoW **before** the recursive copy. `COPYFILE_CLONE` falls back to byte-copy per file; that would look like success and fill the disk. If probe fails: "Project must be on APFS on the same volume as its isolate" — no worktree, no `cp -R`.
 
-Do not put isolates under `~/.fission/` unless that path is the same volume as the project (home-dir projects). Sibling `.fission/` is the rule so an external SSD project stays CoW.
+Keep the current home root (`~/.fission/worktrees`), but clone *into* a directory named after the repo:
+
+```text
+~/.fission/worktrees/app/fission-1de6e4/app/     ← isolate cwd (folder name `app`)
+~/code/app/                                       ← source
+```
+
+`copyfile` destination is the inner `app/`, so `workingDirectory.lastPathComponent` stays `app`. The `fission-<id>` directory is only a disambiguator. Cross-volume still fails (home disk ≠ external project disk).
 
 ### Why not Rift's extras
 
@@ -224,7 +231,7 @@ Tests: dirty + untracked file survive; source unchanged; clone `HEAD` is `fissio
 | `DesktopThreadCreator` | `copyfile` + `switch -c`; drop `worktree add` |
 | `GitBranchResolver` | Unchanged if we always create a branch on git clones |
 | Settle | After PTY teardown, delete isolate dir |
-| `~/.fission/worktrees` | Unused by new creates |
+| `~/.fission/worktrees` | New layout `<repo>/fission-<id>/<repo>/`; old worktree dirs left as-is |
 | UITests / a11y | Rename worktree control id |
 | Non-git projects | Isolation works |
 | Network / non-APFS / other volume | Create fails with CoW error |
