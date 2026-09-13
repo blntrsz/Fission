@@ -162,8 +162,13 @@ extension FissionDesktopUITests {
         XCTAssertEqual(projectPath.value as? String, "/work/fission")
         XCTAssertTrue(
             app.descendants(matching: .any)["new-thread-project-fission"].waitForExistence(timeout: 5),
-            "The remote picker should list the matching project directory."
+            "The remote picker should keep the current folder selectable."
         )
+        XCTAssertTrue(
+            app.descendants(matching: .any)["new-thread-project-src"].waitForExistence(timeout: 5),
+            "The remote picker should list directories available at that path."
+        )
+        XCTAssertTrue(app.descendants(matching: .any)["new-thread-project-Packages"].exists)
 
         if app.buttons["Clear"].waitForExistence(timeout: 2) {
             app.buttons["Clear"].click()

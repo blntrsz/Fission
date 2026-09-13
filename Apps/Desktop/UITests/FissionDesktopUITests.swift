@@ -393,7 +393,7 @@ extension FissionDesktopUITests {
         app.launchEnvironment["FISSION_EXECUTION_EPHEMERAL"] = "1"
         if withRemoteMachine {
             app.launchEnvironment["FISSION_REMOTE_DIRECTORY_LISTING"] = """
-            {"/work":["fission","notes"],"/":["work","tmp"]}
+            {"/work":["fission","notes"],"/work/fission":["src","Packages"],"/":["work","tmp"],"~":["src","work"]}
             """
         }
         if withInterruptProbe || withSearchFixture {

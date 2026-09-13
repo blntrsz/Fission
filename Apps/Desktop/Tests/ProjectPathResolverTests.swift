@@ -6,58 +6,67 @@ import Testing
 struct ProjectPathResolverTests {
     @Test func remotePathQueryFiltersChildDirectories() {
         let projects = RemoteProjectPathResolver.projects(
-            matching: "/work/fi",
-            recentPaths: ["/work/fission"],
+            directory: "/work",
+            namePrefix: "fi",
             childNames: ["fission", "notes", "other"],
-            relativeBase: "/work/fission"
+            typedQuery: "/work/fi",
+            recentPaths: ["/work/fission"]
         )
 
         #expect(projects.map(\.path) == ["/work/fission"])
         #expect(projects.first?.name == "fission")
     }
 
-    @Test func remoteSlashQueryListsChildren() {
+    @Test func remoteSlashQueryListsCurrentFolderAndChildren() {
         let projects = RemoteProjectPathResolver.projects(
-            matching: "~/src/",
-            recentPaths: [],
+            directory: "~/src",
+            namePrefix: "",
             childNames: ["app", "lib"],
-            relativeBase: nil
+            typedQuery: "~/src/",
+            recentPaths: []
         )
 
-        #expect(projects.map(\.path) == ["~/src/app", "~/src/lib"])
+        #expect(projects.map(\.path) == ["~/src", "~/src/app", "~/src/lib"])
     }
 
-    @Test func remoteEmptyQueryUsesRecents() {
+    @Test func remoteExactPathListsWhatIsInside() {
         let projects = RemoteProjectPathResolver.projects(
-            matching: "fis",
-            recentPaths: ["/work/fission", "/tmp/notes"],
-            childNames: nil,
-            relativeBase: nil
+            directory: "/work/fission",
+            namePrefix: "",
+            childNames: ["src", "Packages"],
+            typedQuery: "/work/fission",
+            recentPaths: []
         )
 
-        #expect(projects.map(\.path) == ["/work/fission"])
+        #expect(projects.map(\.path) == [
+            "/work/fission",
+            "/work/fission/Packages",
+            "/work/fission/src"
+        ])
     }
 
     @Test func remoteFallsBackToTypedPathWhenListingIsEmpty() {
         let projects = RemoteProjectPathResolver.projects(
-            matching: "/work/fission",
-            recentPaths: [],
+            directory: "/work",
+            namePrefix: "fission",
             childNames: [],
-            relativeBase: nil
+            typedQuery: "/work/fission",
+            recentPaths: []
         )
 
         #expect(projects.map(\.path) == ["/work/fission"])
     }
 
-    @Test func remoteRelativeQueryUsesMachineProjectAsBase() {
+    @Test func remoteHomeListingUsesAvailableDirectories() {
         let projects = RemoteProjectPathResolver.projects(
-            matching: "./pa",
-            recentPaths: [],
-            childNames: ["packages", "apps"],
-            relativeBase: "~/src/fission"
+            directory: "~",
+            namePrefix: "s",
+            childNames: ["src", "work"],
+            typedQuery: "src",
+            recentPaths: []
         )
 
-        #expect(projects.map(\.path) == ["~/src/fission/packages"])
+        #expect(projects.map(\.path) == ["~/src"])
     }
 }
 
