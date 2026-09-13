@@ -369,11 +369,21 @@ struct ThreadListView: View {
                     navigationModel.select(threadID: threadID)
                 }
             }
-        case let .remote(machine):
+        case let .remote(machine, projectPath):
+            let remembered = RemoteMachine(
+                id: machine.id,
+                name: machine.name,
+                username: machine.username,
+                host: machine.host,
+                sshPort: machine.sshPort,
+                projectPath: projectPath
+            )
+            remoteMachineStore.upsert(remembered)
             Task {
                 if let threadID = await DesktopThreadCreator.createRemote(
                     in: model,
-                    machine: machine
+                    machine: remembered,
+                    projectPath: projectPath
                 ) {
                     mostRecentlyCreatedThreadID = threadID
                     navigationModel.select(threadID: threadID)

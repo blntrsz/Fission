@@ -5,7 +5,7 @@ import SwiftUI
 
 enum NewThreadRequest: Equatable {
     case local(URL, createWorktree: Bool)
-    case remote(RemoteMachine)
+    case remote(RemoteMachine, projectPath: String)
 }
 
 struct NewThreadSheet: View {
@@ -17,6 +17,7 @@ struct NewThreadSheet: View {
     @State private var query = ""
     @State private var selectedIndex = 0
     @State private var selectedMachineID: UUID?
+    @State private var remoteProjectPath = ""
     @AppStorage("createThreadsInNewWorktree") private var createInNewWorktree = false
     @AppStorage("newThreadLocation") private var locationRaw = NewThreadLocation.local.rawValue
     @FocusState private var focusedField: Field?
@@ -37,13 +38,21 @@ struct NewThreadSheet: View {
             if selectedMachineID == nil {
                 selectedMachineID = machines.first?.id
             }
-            focusedField = location == .local ? .project : nil
+            fillRemoteProjectPath(from: selectedMachine)
+            focusedField = location == .local ? .project : .remotePath
         }
         .onChange(of: query) { _, _ in
             selectedIndex = projects.isEmpty ? -1 : 0
         }
         .onChange(of: location) { _, location in
-            focusedField = location == .local ? .project : nil
+            focusedField = location == .local ? .project : .remotePath
+        }
+        .onChange(of: selectedMachineID) { previousID, _ in
+            let previousPath = machines.first { $0.id == previousID }?.projectPath ?? ""
+            let typedPath = remoteProjectPath.trimmingCharacters(in: .whitespacesAndNewlines)
+            if typedPath.isEmpty || typedPath == previousPath {
+                fillRemoteProjectPath(from: selectedMachine)
+            }
         }
         .onKeyPress(.upArrow) {
             moveSelection(by: -1)
@@ -78,7 +87,7 @@ struct NewThreadSheet: View {
                         .font(.title2.bold())
                     Text(location == .local
                          ? "Choose the project directory where the agent should work."
-                         : "Choose a remote machine. The terminal opens already connected with mosh.")
+                         : "Choose a remote machine and project path. Terminals open there over mosh.")
                         .foregroundStyle(.secondary)
                 }
 
@@ -115,6 +124,15 @@ struct NewThreadSheet: View {
                     text: $query,
                     focus: .project
                 )
+            } else {
+                field(
+                    title: "Project folder",
+                    systemImage: "folder",
+                    placeholder: "~/src/project or /absolute/path",
+                    text: $remoteProjectPath,
+                    focus: .remotePath,
+                    accessibilityIdentifier: "remote-project-path-field"
+                )
             }
         }
         .padding(24)
@@ -125,7 +143,8 @@ struct NewThreadSheet: View {
         systemImage: String,
         placeholder: String,
         text: Binding<String>,
-        focus: Field
+        focus: Field,
+        accessibilityIdentifier: String = "project-path-field"
     ) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
@@ -137,7 +156,7 @@ struct NewThreadSheet: View {
                     .foregroundStyle(.secondary)
 
                 TextField(placeholder, text: text)
-                    .accessibilityIdentifier("project-path-field")
+                    .accessibilityIdentifier(accessibilityIdentifier)
                     .textFieldStyle(.plain)
                     .font(.title3)
                     .focused($focusedField, equals: focus)
@@ -321,12 +340,19 @@ struct NewThreadSheet: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .truncationMode(.middle)
+                    if let projectPath = machine.projectPath {
+                        Text(projectPath)
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
                 }
 
                 Spacer()
             }
             .padding(.horizontal, 16)
-            .frame(height: 64)
+            .frame(height: 76)
             .contentShape(Rectangle())
             .background(
                 selectedMachineID == machine.id ? Color.accentColor.opacity(0.18) : Color.clear,
@@ -359,7 +385,7 @@ struct NewThreadSheet: View {
         case .local:
             !projects.isEmpty
         case .remote:
-            selectedMachine != nil
+            selectedMachine != nil && RemoteMachine.normalizedProjectPath(remoteProjectPath) != nil
         }
     }
 
@@ -415,14 +441,22 @@ struct NewThreadSheet: View {
             guard projects.indices.contains(selectedIndex) else { return }
             create(.local(projects[selectedIndex].url, createWorktree: createInNewWorktree))
         case .remote:
-            guard let selectedMachine else { return }
-            create(.remote(selectedMachine))
+            guard let selectedMachine,
+                  let projectPath = RemoteMachine.normalizedProjectPath(remoteProjectPath) else {
+                return
+            }
+            create(.remote(selectedMachine, projectPath: projectPath))
         }
+    }
+
+    private func fillRemoteProjectPath(from machine: RemoteMachine?) {
+        remoteProjectPath = machine?.projectPath ?? ""
     }
 }
 
 private enum Field: Hashable {
     case project
+    case remotePath
 }
 
 private enum NewThreadLocation: String {

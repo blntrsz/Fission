@@ -30,6 +30,8 @@ public final class RemoteMachineStore {
 
     public func upsert(_ machine: RemoteMachine) {
         guard machine.isValid else { return }
+        var machine = machine
+        machine.projectPath = RemoteMachine.normalizedProjectPath(machine.projectPath)
         if let index = machines.firstIndex(where: { $0.id == machine.id }) {
             machines[index] = machine
         } else {

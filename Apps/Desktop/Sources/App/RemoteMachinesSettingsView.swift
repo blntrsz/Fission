@@ -24,6 +24,11 @@ struct RemoteMachinesSettingsView: View {
                                     Text(machine.target)
                                         .font(.caption)
                                         .foregroundStyle(.secondary)
+                                    if let projectPath = machine.projectPath {
+                                        Text(projectPath)
+                                            .font(.caption)
+                                            .foregroundStyle(.tertiary)
+                                    }
                                 }
                                 Spacer()
                                 Image(systemName: "chevron.right")
@@ -42,7 +47,7 @@ struct RemoteMachinesSettingsView: View {
             } header: {
                 Text("Machines")
             } footer: {
-                Text("Remote Threads open a login shell that execs mosh into the selected host.")
+                Text("Remote Threads open a login shell that execs mosh, then cd into the machine's project path.")
             }
 
             Button("Add Machine") {
@@ -72,6 +77,7 @@ private struct RemoteMachineEditor: View {
     @State private var username: String
     @State private var host: String
     @State private var portText: String
+    @State private var projectPath: String
     private let machineID: UUID
     let save: (RemoteMachine) -> Void
     let cancel: () -> Void
@@ -88,6 +94,7 @@ private struct RemoteMachineEditor: View {
         _portText = State(
             initialValue: machine.sshPort.map(String.init) ?? ""
         )
+        _projectPath = State(initialValue: machine.projectPath ?? "")
         self.save = save
         self.cancel = cancel
     }
@@ -106,6 +113,8 @@ private struct RemoteMachineEditor: View {
                     .accessibilityIdentifier("remote-machine-host-field")
                 TextField("SSH port", text: $portText, prompt: Text("22"))
                     .accessibilityIdentifier("remote-machine-port-field")
+                TextField("Project path", text: $projectPath, prompt: Text("~/src/project"))
+                    .accessibilityIdentifier("remote-machine-project-path-field")
             }
             .formStyle(.grouped)
 
@@ -134,7 +143,8 @@ private struct RemoteMachineEditor: View {
             name: name.trimmingCharacters(in: .whitespacesAndNewlines),
             username: username.trimmingCharacters(in: .whitespacesAndNewlines),
             host: host.trimmingCharacters(in: .whitespacesAndNewlines),
-            sshPort: trimmedPort.isEmpty ? nil : port
+            sshPort: trimmedPort.isEmpty ? nil : port,
+            projectPath: projectPath
         )
     }
 }

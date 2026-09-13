@@ -58,18 +58,29 @@ enum DesktopThreadCreator {
     @MainActor
     static func createRemote(
         in model: ThreadListModel,
-        machine: RemoteMachine
+        machine: RemoteMachine,
+        projectPath: String
     ) async -> UUID? {
         guard machine.isValid else {
             model.errorMessage = "The remote machine needs a host."
             return nil
         }
 
+        guard let directory = RemoteMachine.normalizedProjectPath(projectPath) else {
+            model.errorMessage = "The remote Thread needs a project path."
+            return nil
+        }
+
         return await model.createThread(
             title: machine.target,
-            projectName: machine.displayName,
+            workingDirectory: directory,
+            projectName: RemoteMachine.projectName(from: directory) ?? machine.displayName,
             remoteMachineID: machine.id,
-            remoteCommand: machine.moshCommand
+            remoteCommand: MoshCommand.loginShellCommand(
+                target: machine.target,
+                sshPort: machine.sshPort,
+                remoteDirectory: directory
+            )
         )
     }
 
