@@ -19,6 +19,7 @@ public struct AgentThread: Identifiable, Hashable, Sendable {
     public let remoteCommand: String?
     public let createdAt: Date
     public private(set) var updatedAt: Date
+    public private(set) var sortIndex: Int
 
     public var isSettled: Bool { status == .settled }
     public var isRemote: Bool { remoteCommand != nil || remoteMachineID != nil }
@@ -32,7 +33,8 @@ public struct AgentThread: Identifiable, Hashable, Sendable {
         remoteMachineID: UUID? = nil,
         remoteCommand: String? = nil,
         createdAt: Date = .now,
-        updatedAt: Date? = nil
+        updatedAt: Date? = nil,
+        sortIndex: Int = 0
     ) {
         self.id = id
         self.title = title
@@ -43,6 +45,7 @@ public struct AgentThread: Identifiable, Hashable, Sendable {
         self.remoteCommand = remoteCommand
         self.createdAt = createdAt
         self.updatedAt = updatedAt ?? createdAt
+        self.sortIndex = sortIndex
     }
 
     public mutating func rename(to title: String, at date: Date = .now) {
@@ -53,5 +56,9 @@ public struct AgentThread: Identifiable, Hashable, Sendable {
     public mutating func transition(to status: Status, at date: Date = .now) {
         self.status = status
         updatedAt = date
+    }
+
+    public mutating func place(at sortIndex: Int) {
+        self.sortIndex = sortIndex
     }
 }

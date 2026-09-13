@@ -60,4 +60,14 @@ struct AgentThreadTests {
         #expect(thread.remoteMachineID == machineID)
         #expect(thread.workingDirectory == nil)
     }
+
+    @Test func placingDoesNotChangeUpdatedAt() {
+        let createdAt = Date(timeIntervalSince1970: 1_000)
+        var thread = AgentThread(title: "Research", createdAt: createdAt)
+
+        thread.place(at: 4)
+
+        #expect(thread.sortIndex == 4)
+        #expect(thread.updatedAt == createdAt)
+    }
 }

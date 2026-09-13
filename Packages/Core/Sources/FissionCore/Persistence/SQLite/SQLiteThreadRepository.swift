@@ -15,6 +15,7 @@ private struct ThreadRecord: Codable, FetchableRecord, PersistableRecord, Sendab
     var remoteCommand: String?
     var createdAt: Date
     var updatedAt: Date
+    var sortIndex: Int
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -26,11 +27,13 @@ private struct ThreadRecord: Codable, FetchableRecord, PersistableRecord, Sendab
         case remoteCommand = "remote_command"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
+        case sortIndex = "sort_index"
     }
 
     enum Columns {
         static let id = Column(CodingKeys.id)
         static let updatedAt = Column(CodingKeys.updatedAt)
+        static let sortIndex = Column(CodingKeys.sortIndex)
     }
 
     init(_ thread: AgentThread) {
@@ -43,6 +46,7 @@ private struct ThreadRecord: Codable, FetchableRecord, PersistableRecord, Sendab
         remoteCommand = thread.remoteCommand
         createdAt = thread.createdAt
         updatedAt = thread.updatedAt
+        sortIndex = thread.sortIndex
     }
 
     func thread() throws -> AgentThread {
@@ -61,7 +65,8 @@ private struct ThreadRecord: Codable, FetchableRecord, PersistableRecord, Sendab
             remoteMachineID: remoteMachineID,
             remoteCommand: remoteCommand,
             createdAt: createdAt,
-            updatedAt: updatedAt
+            updatedAt: updatedAt,
+            sortIndex: sortIndex
         )
     }
 }
@@ -93,6 +98,7 @@ public actor SQLiteThreadRepository {
         registerWorkingDirectoryMigration(in: &migrator)
         registerSettledStatusMigration(in: &migrator)
         registerProjectNameMigration(in: &migrator)
+        registerSortIndexMigration(in: &migrator)
         registerRemoteThreadMigration(in: &migrator)
         return migrator
     }
@@ -165,6 +171,26 @@ public actor SQLiteThreadRepository {
         }
     }
 
+    private static func registerSortIndexMigration(in migrator: inout DatabaseMigrator) {
+        migrator.registerMigration("addThreadSortIndex") { db in
+            try db.alter(table: ThreadRecord.databaseTableName) { table in
+                table.add(column: "sort_index", .integer).notNull().defaults(to: 0)
+            }
+            try db.execute(
+                sql: """
+                    UPDATE threads SET sort_index = (
+                        SELECT COUNT(*) FROM threads AS other
+                        WHERE other.updated_at > threads.updated_at
+                           OR (
+                                other.updated_at = threads.updated_at
+                                AND other.id < threads.id
+                           )
+                    )
+                    """
+            )
+        }
+    }
+
     private static func registerRemoteThreadMigration(in migrator: inout DatabaseMigrator) {
         migrator.registerMigration("addThreadRemoteMachine") { db in
             try db.alter(table: ThreadRecord.databaseTableName) { table in
@@ -177,7 +203,21 @@ public actor SQLiteThreadRepository {
     public func create(_ thread: AgentThread) async throws {
         do {
             try await database.write { db in
-                try ThreadRecord(thread).insert(db)
+                var record = ThreadRecord(thread)
+                let existingCount = try Int.fetchOne(
+                    db,
+                    sql: "SELECT COUNT(*) FROM threads"
+                ) ?? 0
+                if existingCount == 0 {
+                    record.sortIndex = 0
+                } else {
+                    let minimum = try Int.fetchOne(
+                        db,
+                        sql: "SELECT MIN(sort_index) FROM threads"
+                    ) ?? 0
+                    record.sortIndex = minimum - 1
+                }
+                try record.insert(db)
             }
         } catch DatabaseError.SQLITE_CONSTRAINT {
             throw SQLiteRepositoryError.threadAlreadyExists
@@ -202,9 +242,32 @@ public actor SQLiteThreadRepository {
         do {
             return try await database.read { db in
                 try ThreadRecord
-                    .order(ThreadRecord.Columns.updatedAt.desc, ThreadRecord.Columns.id)
+                    .order(
+                        ThreadRecord.Columns.sortIndex,
+                        ThreadRecord.Columns.updatedAt.desc,
+                        ThreadRecord.Columns.id
+                    )
                     .fetchAll(db)
                     .map { try $0.thread() }
+            }
+        } catch let error as SQLiteRepositoryError {
+            throw error
+        } catch {
+            throw Self.queryError(error)
+        }
+    }
+
+    public func reorder(ids: [UUID]) async throws {
+        do {
+            try await database.write { db in
+                for (index, id) in ids.enumerated() {
+                    let updated = try ThreadRecord
+                        .filter(ThreadRecord.Columns.id == id.uuidString)
+                        .updateAll(db, ThreadRecord.Columns.sortIndex.set(to: index))
+                    guard updated == 1 else {
+                        throw SQLiteRepositoryError.threadNotFound
+                    }
+                }
             }
         } catch let error as SQLiteRepositoryError {
             throw error

@@ -295,6 +295,55 @@ final class FissionDesktopUITests: XCTestCase {
         screenshot.lifetime = .keepAlways
         add(screenshot)
     }
+
+    @MainActor
+    func testUserCanReorderThreadsInSidebar() throws {
+        continueAfterFailure = false
+
+        let context = try launchIsolatedApp()
+        let app = context.app
+        defer {
+            app.terminate()
+            try? FileManager.default.removeItem(at: context.root)
+        }
+
+        XCTAssertTrue(app.staticTexts["Explore Fission"].waitForExistence(timeout: 10))
+        app.terminate()
+        try seedThreads(count: 3, databaseURL: context.databaseURL, replacingExisting: true)
+        app.launch()
+
+        let seed00 = app.staticTexts["Seed 00"]
+        let seed02 = app.staticTexts["Seed 02"]
+        XCTAssertTrue(seed00.waitForExistence(timeout: 10))
+        XCTAssertTrue(seed02.waitForExistence(timeout: 10))
+
+        let originalOrder = sidebarThreadTitles(in: app)
+        XCTAssertEqual(originalOrder, ["Seed 02", "Seed 01", "Seed 00"])
+
+        seed00.press(forDuration: 0.8, thenDragTo: seed02)
+
+        var reordered = sidebarThreadTitles(in: app)
+        let deadline = Date().addingTimeInterval(5)
+        while Date() < deadline, reordered == originalOrder {
+            Thread.sleep(forTimeInterval: 0.05)
+            reordered = sidebarThreadTitles(in: app)
+        }
+        XCTAssertNotEqual(
+            reordered,
+            originalOrder,
+            "Dragging a Thread in the sidebar should change its order."
+        )
+        XCTAssertEqual(Set(reordered), Set(originalOrder))
+
+        app.terminate()
+        app.launch()
+        XCTAssertTrue(app.staticTexts["Seed 00"].waitForExistence(timeout: 10))
+        XCTAssertEqual(
+            sidebarThreadTitles(in: app),
+            reordered,
+            "Reordered Threads should persist across launches."
+        )
+    }
 }
 
 extension FissionDesktopUITests {
@@ -428,6 +477,16 @@ extension FissionDesktopUITests {
         (element.value as? String) ?? element.label
     }
 
+    func sidebarThreadTitles(in app: XCUIApplication) -> [String] {
+        let threadList = app.outlines["thread-sidebar-list"].exists
+            ? app.outlines["thread-sidebar-list"]
+            : app.outlines.firstMatch
+        return threadList.staticTexts.allElementsBoundByIndex.compactMap { element in
+            let label = displayedText(of: element)
+            return label.hasPrefix("Seed ") ? label : nil
+        }
+    }
+
     func waitForFile(at url: URL, timeout: TimeInterval) -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
@@ -442,20 +501,23 @@ extension FissionDesktopUITests {
     private func seedThreads(
         count: Int,
         status: String = "active",
-        databaseURL: URL
+        databaseURL: URL,
+        replacingExisting: Bool = false
     ) throws {
         let values = (0..<count).map { index in
             let id = String(format: "00000000-0000-0000-0000-%012d", index)
-            return "('\(id)', 'Seed \(String(format: "%02d", index))', '\(status)', NULL, \(index), \(index))"
+            let sortIndex = count - 1 - index
+            return "('\(id)', 'Seed \(String(format: "%02d", index))', '\(status)', NULL, \(index), \(index), \(sortIndex))"
         }.joined(separator: ",")
 
         let process = Process()
         let output = Pipe()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/sqlite3")
-        process.arguments = [
-            databaseURL.path,
-            "INSERT INTO threads (id, title, status, working_directory, created_at, updated_at) VALUES \(values);"
-        ]
+        let statements = [
+            replacingExisting ? "DELETE FROM threads;" : nil,
+            "INSERT INTO threads (id, title, status, working_directory, created_at, updated_at, sort_index) VALUES \(values);"
+        ].compactMap { $0 }.joined(separator: " ")
+        process.arguments = [databaseURL.path, statements]
         process.standardOutput = output
         process.standardError = output
         try process.run()
