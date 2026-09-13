@@ -337,14 +337,16 @@ private final class TerminalExecutionDaemon {
         let environmentEntries = environment.map { "\($0.key)=\($0.value)" }
         let spawnResult = withCStringArray(arguments) { argumentPointers in
             withCStringArray(environmentEntries) { environmentPointers in
-                posix_spawn(
-                    &processID,
-                    launcher,
-                    &actions,
-                    &attributes,
-                    argumentPointers,
-                    environmentPointers
-                )
+                launcher.withCString { executable in
+                    posix_spawn(
+                        &processID,
+                        executable,
+                        &actions,
+                        &attributes,
+                        argumentPointers,
+                        environmentPointers
+                    )
+                }
             }
         }
         guard spawnResult == 0 else {
@@ -596,9 +598,18 @@ private func withCStringArray<Result>(
     _ strings: [String],
     _ body: (UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>) -> Result
 ) -> Result {
-    var pointers = strings.map { strdup($0) }
+    // `strdup(string)` uses implicit String→C conversion. In this generic
+    // function that retain path treats ARM64 small strings (e.g. "-l", "-c",
+    // "/bin/zsh") as heap objects and crashes in RefCounts::incrementSlow.
+    var pointers: [UnsafeMutablePointer<CChar>?] = strings.map { string in
+        string.withCString { strdup($0) }
+    }
     pointers.append(nil)
-    defer { pointers.dropLast().forEach { free($0) } }
+    defer {
+        for pointer in pointers {
+            free(pointer)
+        }
+    }
     return pointers.withUnsafeMutableBufferPointer { buffer in
         body(buffer.baseAddress!)
     }
@@ -627,7 +638,7 @@ private func runTerminalChild(shell: String, startupCommand: String?) -> Never {
         shellArguments = [shell, "-l"]
     }
     withCStringArray(shellArguments) { pointers in
-        execv(shell, pointers)
+        shell.withCString { execv($0, pointers) }
     }
     FileHandle.standardError.write(
         Data("FissionExecution: could not execute \(shell): \(currentPOSIXError())\n".utf8)
