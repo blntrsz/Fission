@@ -615,45 +615,88 @@ private func withCStringArray<Result>(
     }
 }
 
+private func cString(_ value: StaticString) -> UnsafePointer<CChar> {
+    UnsafeRawPointer(value.utf8Start).assumingMemoryBound(to: CChar.self)
+}
+
+private func writeChildError(_ prefix: StaticString) {
+    fputs(cString(prefix), stderr)
+    fputs(strerror(errno), stderr)
+    fputs("\n", stderr)
+}
+
+private func execShell(
+    _ shell: UnsafePointer<CChar>,
+    argv: UnsafeMutablePointer<UnsafeMutablePointer<CChar>?>
+) -> Never {
+    execv(shell, argv)
+    writeChildError("FissionExecution: could not execute shell: ")
+    _exit(EXIT_FAILURE)
+}
+
 /// Completes PTY setup after `POSIX_SPAWN_SETSID`, then becomes the user's shell.
-private func runTerminalChild(shell: String, startupCommand: String?) -> Never {
+private func runTerminalChild(
+    shell: UnsafePointer<CChar>,
+    startupCommand: UnsafePointer<CChar>?
+) -> Never {
     guard ioctl(STDIN_FILENO, TIOCSCTTY, 0) == 0 else {
-        FileHandle.standardError.write(
-            Data("FissionExecution: could not set the controlling terminal: \(currentPOSIXError())\n".utf8)
-        )
-        exit(EXIT_FAILURE)
+        writeChildError("FissionExecution: could not set the controlling terminal: ")
+        _exit(EXIT_FAILURE)
     }
     guard tcsetpgrp(STDIN_FILENO, getpgrp()) == 0 else {
-        FileHandle.standardError.write(
-            Data("FissionExecution: could not set the foreground process group: \(currentPOSIXError())\n".utf8)
-        )
-        exit(EXIT_FAILURE)
+        writeChildError("FissionExecution: could not set the foreground process group: ")
+        _exit(EXIT_FAILURE)
     }
 
     signal(SIGPIPE, SIG_DFL)
-    let shellArguments: [String]
-    if let startupCommand, !startupCommand.isEmpty {
-        shellArguments = [shell, "-l", "-c", startupCommand]
+    let shellArgument = UnsafeMutablePointer(mutating: shell)
+    let loginFlag = UnsafeMutablePointer(mutating: cString("-l"))
+    if let startupCommand, startupCommand.pointee != 0 {
+        var argv: (
+            UnsafeMutablePointer<CChar>?,
+            UnsafeMutablePointer<CChar>?,
+            UnsafeMutablePointer<CChar>?,
+            UnsafeMutablePointer<CChar>?,
+            UnsafeMutablePointer<CChar>?
+        ) = (
+            shellArgument,
+            loginFlag,
+            UnsafeMutablePointer(mutating: cString("-c")),
+            UnsafeMutablePointer(mutating: startupCommand),
+            nil
+        )
+        withUnsafeMutablePointer(to: &argv) { pointer in
+            pointer.withMemoryRebound(to: UnsafeMutablePointer<CChar>?.self, capacity: 5) {
+                execShell(shell, argv: $0)
+            }
+        }
     } else {
-        shellArguments = [shell, "-l"]
+        var argv: (
+            UnsafeMutablePointer<CChar>?,
+            UnsafeMutablePointer<CChar>?,
+            UnsafeMutablePointer<CChar>?
+        ) = (shellArgument, loginFlag, nil)
+        withUnsafeMutablePointer(to: &argv) { pointer in
+            pointer.withMemoryRebound(to: UnsafeMutablePointer<CChar>?.self, capacity: 3) {
+                execShell(shell, argv: $0)
+            }
+        }
     }
-    withCStringArray(shellArguments) { pointers in
-        shell.withCString { execv($0, pointers) }
-    }
-    FileHandle.standardError.write(
-        Data("FissionExecution: could not execute \(shell): \(currentPOSIXError())\n".utf8)
-    )
-    exit(EXIT_FAILURE)
+}
+
+if let childIndex = (0..<Int(CommandLine.argc)).first(where: { index in
+    guard let argument = CommandLine.unsafeArgv[index] else { return false }
+    return strcmp(argument, cString("--terminal-child")) == 0
+}), childIndex + 1 < Int(CommandLine.argc),
+   let shell = CommandLine.unsafeArgv[childIndex + 1]
+{
+    let startupCommand = childIndex + 2 < Int(CommandLine.argc)
+        ? CommandLine.unsafeArgv[childIndex + 2]
+        : nil
+    runTerminalChild(shell: shell, startupCommand: startupCommand)
 }
 
 let arguments = CommandLine.arguments
-if let childIndex = arguments.firstIndex(of: "--terminal-child"),
-   arguments.indices.contains(childIndex + 1) {
-    let startupCommand = arguments.indices.contains(childIndex + 2)
-        ? arguments[childIndex + 2]
-        : nil
-    runTerminalChild(shell: arguments[childIndex + 1], startupCommand: startupCommand)
-}
 
 let socketPath: String
 if let socketIndex = arguments.firstIndex(of: "--socket"),
