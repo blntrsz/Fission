@@ -20,7 +20,7 @@ struct NewThreadSheet: View {
     @State private var selectedIndex = 0
     @State private var selectedMachineID: UUID?
     @State private var remoteProjectPath = ""
-    @State private var remoteChildNamesByDirectory: [String: [String]] = [:]
+    @State private var remoteListingsByDirectory: [String: RemoteDirectoryListing] = [:]
     @AppStorage("createThreadsInNewWorktree") private var createInNewWorktree = false
     @AppStorage("newThreadLocation") private var locationRaw = NewThreadLocation.local.rawValue
     @FocusState private var focusedField: Field?
@@ -251,11 +251,19 @@ struct NewThreadSheet: View {
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 24)
 
-            if projects.isEmpty {
+            if isRemoteListingPending {
+                ProgressView("Listing directories…")
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .accessibilityIdentifier("remote-directory-listing")
+            } else if projects.isEmpty {
                 ContentUnavailableView(
                     "No Directories Found",
                     systemImage: "folder.badge.questionmark",
-                    description: Text("Enter an existing path, such as ~/Projects/.")
+                    description: Text(
+                        location == .remote
+                            ? "Only existing folders on the remote machine can be picked."
+                            : "Enter an existing path, such as ~/Projects/."
+                    )
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -402,17 +410,19 @@ struct NewThreadSheet: View {
             RemoteProjectPathResolver.projects(
                 directory: remoteListingTarget?.directory ?? "~",
                 namePrefix: remoteListingTarget?.namePrefix ?? "",
-                childNames: cachedRemoteChildNames,
-                typedQuery: remoteProjectPath,
-                recentPaths: recentRemotePaths
+                listing: cachedRemoteListing
             )
         }
     }
 
-    private var cachedRemoteChildNames: [String]? {
+    private var cachedRemoteListing: RemoteDirectoryListing? {
         guard let directory = remoteListingTarget?.directory,
               let machine = selectedMachine else { return nil }
-        return remoteChildNamesByDirectory[listingCacheKey(machineID: machine.id, directory: directory)]
+        return remoteListingsByDirectory[listingCacheKey(machineID: machine.id, directory: directory)]
+    }
+
+    private var isRemoteListingPending: Bool {
+        location == .remote && selectedMachine != nil && cachedRemoteListing == nil
     }
 
     private var remoteListingID: String {
@@ -430,10 +440,13 @@ struct NewThreadSheet: View {
             query: ProjectPathQuery.normalizeRemoteQuery(remoteProjectPath),
             relativeBase: relativeBase,
             exactChildNames: { directory in
-                guard let machine = selectedMachine else { return nil }
-                return remoteChildNamesByDirectory[
-                    listingCacheKey(machineID: machine.id, directory: directory)
-                ]
+                guard let machine = selectedMachine,
+                      case let .contents(names) = remoteListingsByDirectory[
+                          listingCacheKey(machineID: machine.id, directory: directory)
+                      ] else {
+                    return nil
+                }
+                return names
             }
         )
     }
@@ -447,11 +460,7 @@ struct NewThreadSheet: View {
         case .local:
             !projects.isEmpty
         case .remote:
-            selectedMachine != nil
-                && (
-                    selectedRemoteProjectPath != nil
-                        || RemoteMachine.normalizedProjectPath(remoteProjectPath) != nil
-                )
+            selectedMachine != nil && selectedRemoteProjectPath != nil
         }
     }
 
@@ -498,10 +507,9 @@ struct NewThreadSheet: View {
             guard projects.indices.contains(selectedIndex) else { return }
             create(.local(projects[selectedIndex].url, createWorktree: createInNewWorktree))
         case .remote:
-            guard let selectedMachine else { return }
-            let projectPath = selectedRemoteProjectPath
-                ?? RemoteMachine.normalizedProjectPath(remoteProjectPath)
-            guard let projectPath else { return }
+            guard let selectedMachine, let projectPath = selectedRemoteProjectPath else {
+                return
+            }
             create(.remote(selectedMachine, projectPath: projectPath))
         }
     }
@@ -517,12 +525,12 @@ struct NewThreadSheet: View {
             return
         }
         let key = listingCacheKey(machineID: machine.id, directory: directory)
-        if remoteChildNamesByDirectory[key] != nil { return }
+        if remoteListingsByDirectory[key] != nil { return }
         try? await Task.sleep(for: .milliseconds(120))
         guard !Task.isCancelled else { return }
-        let names = await remoteDirectoryCatalog.childDirectories(on: machine, in: directory)
+        let listing = await remoteDirectoryCatalog.listing(on: machine, in: directory)
         guard !Task.isCancelled else { return }
-        remoteChildNamesByDirectory[key] = names
+        remoteListingsByDirectory[key] = listing
         selectedIndex = 0
     }
 }

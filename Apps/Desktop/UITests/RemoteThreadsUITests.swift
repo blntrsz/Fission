@@ -182,4 +182,38 @@ extension FissionDesktopUITests {
         app.descendants(matching: .any)["new-thread-project-notes"].firstMatch.doubleClick()
         XCTAssertEqual(projectPath.value as? String, "/work/notes/")
     }
+
+    @MainActor
+    func testRemoteProjectPickerRejectsPathsThatDoNotExist() throws {
+        continueAfterFailure = false
+
+        let context = try launchIsolatedApp(withRemoteMachine: true)
+        let app = context.app
+        defer {
+            app.terminate()
+            try? FileManager.default.removeItem(at: context.root)
+        }
+
+        XCTAssertTrue(app.staticTexts["Explore Fission"].waitForExistence(timeout: 10))
+        app.buttons["new-thread-button"].click()
+
+        let remoteSegment = app.descendants(matching: .any)["new-thread-location-remote"]
+        if remoteSegment.waitForExistence(timeout: 2) {
+            remoteSegment.click()
+        } else {
+            app.radioButtons["Remote"].click()
+        }
+
+        let projectPath = app.textFields["remote-project-path-field"]
+        XCTAssertTrue(projectPath.waitForExistence(timeout: 5))
+        if app.buttons["Clear"].waitForExistence(timeout: 2) {
+            app.buttons["Clear"].click()
+        }
+        projectPath.click()
+        projectPath.typeText("/nope/nowhere")
+
+        XCTAssertTrue(app.staticTexts["No Directories Found"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.descendants(matching: .any)["new-thread-project-nowhere"].exists)
+        XCTAssertFalse(app.buttons["create-thread-button"].isEnabled)
+    }
 }

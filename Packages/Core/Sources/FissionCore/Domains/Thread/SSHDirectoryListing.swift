@@ -42,6 +42,19 @@ public enum SSHDirectoryListing {
         return try? JSONDecoder().decode([String: [String]].self, from: data)
     }
 
+    public static func result(status: Int32, output: String) -> RemoteDirectoryListing {
+        switch status {
+        case 0:
+            .contents(parseOutput(output))
+        case Int32(notADirectoryStatus):
+            .missing
+        default:
+            .failed
+        }
+    }
+
+    public static let notADirectoryStatus = 2
+
     private static let listingScript = """
     path=$1
     case "$path" in
@@ -49,10 +62,17 @@ public enum SSHDirectoryListing {
     ~/*) dir="$HOME/${path#~/}" ;;
     *) dir="$path" ;;
     esac
-    [ -d "$dir" ] || exit 0
+    [ -d "$dir" ] || exit 2
     find "$dir" -mindepth 1 -maxdepth 1 ! -name '.*' -print 2>/dev/null | while IFS= read -r p; do
       [ -d "$p" ] || continue
       printf '%s\\n' "${p##*/}"
     done
     """
+}
+
+/// Result of listing directories on a Remote Machine.
+public enum RemoteDirectoryListing: Equatable, Sendable {
+    case missing
+    case failed
+    case contents([String])
 }

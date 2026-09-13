@@ -48,18 +48,20 @@ public enum ProjectPathQuery {
         return (join(target.directory, exact), "")
     }
 
-    /// Children at `directory`, plus the directory itself when browsing inside it.
+    /// Children at `directory`. Include `directory` itself only when it was listed as existing.
     public static func pickerPaths(
         directory: String,
         namePrefix: String,
-        childNames: [String]
+        childNames: [String],
+        includeCurrentDirectory: Bool
     ) -> [String] {
         let children = childProjects(
             directory: directory,
             names: childNames,
             namePrefix: namePrefix
         )
-        guard namePrefix.isEmpty,
+        guard includeCurrentDirectory,
+              namePrefix.isEmpty,
               let current = MoshCommand.normalizedDirectory(directory),
               current != "/",
               current != "~",
