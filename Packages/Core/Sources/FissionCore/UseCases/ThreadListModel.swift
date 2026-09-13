@@ -55,7 +55,9 @@ public final class ThreadListModel {
         id: UUID = UUID(),
         title: String,
         workingDirectory: String? = nil,
-        projectName: String? = nil
+        projectName: String? = nil,
+        remoteMachineID: UUID? = nil,
+        remoteCommand: String? = nil
     ) async -> UUID? {
         guard let repository, didLoad else { return nil }
 
@@ -66,7 +68,9 @@ public final class ThreadListModel {
             id: id,
             title: trimmedTitle,
             workingDirectory: workingDirectory,
-            projectName: projectName
+            projectName: projectName,
+            remoteMachineID: remoteMachineID,
+            remoteCommand: remoteCommand
         )
 
         do {

@@ -62,6 +62,7 @@ final class TerminalTabsViewModel: Identifiable {
     nonisolated let threadID: UUID
     private(set) var threadTitle: String
     private(set) var workingDirectory: String?
+    private(set) var remoteCommand: String?
     private(set) var tabs: [TerminalTab] = []
     var selectedTabID: UUID?
     private let agentActivityModel: AgentActivityModel
@@ -71,6 +72,7 @@ final class TerminalTabsViewModel: Identifiable {
         threadID = thread.id
         threadTitle = thread.title
         workingDirectory = thread.workingDirectory
+        remoteCommand = thread.remoteCommand
         self.agentActivityModel = agentActivityModel
 
         let restoredTabs = TerminalWorkspacePersistence.load(threadID: thread.id)
@@ -88,6 +90,7 @@ final class TerminalTabsViewModel: Identifiable {
     func update(thread: AgentThread) {
         threadTitle = thread.title
         workingDirectory = thread.workingDirectory
+        remoteCommand = thread.remoteCommand
     }
 
     func addTab() {
@@ -188,6 +191,7 @@ final class TerminalTabsViewModel: Identifiable {
             title: title,
             threadID: threadID,
             workingDirectory: workingDirectory,
+            startupCommand: remoteCommand,
             agentActivityModel: agentActivityModel,
             didRename: { [weak self] in self?.persist() }
         )
@@ -230,6 +234,7 @@ final class TerminalTab: Identifiable {
         title: String? = nil,
         threadID: UUID,
         workingDirectory: String?,
+        startupCommand: String?,
         agentActivityModel: AgentActivityModel,
         didRename: @escaping () -> Void
     ) {
@@ -241,6 +246,7 @@ final class TerminalTab: Identifiable {
             id: id,
             threadID: threadID,
             workingDirectory: workingDirectory,
+            startupCommand: startupCommand,
             environment: agentActivityModel.environment(threadID: threadID, tabID: id)
         )
         self.persistentSession = persistentSession

@@ -55,6 +55,24 @@ enum DesktopThreadCreator {
         }
     }
 
+    @MainActor
+    static func createRemote(
+        in model: ThreadListModel,
+        machine: RemoteMachine
+    ) async -> UUID? {
+        guard machine.isValid else {
+            model.errorMessage = "The remote machine needs a host."
+            return nil
+        }
+
+        return await model.createThread(
+            title: machine.target,
+            projectName: machine.displayName,
+            remoteMachineID: machine.id,
+            remoteCommand: machine.moshCommand
+        )
+    }
+
     private static func makeWorktree(
         from workingDirectory: String,
         worktreeRoot: URL,

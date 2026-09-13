@@ -301,7 +301,8 @@ extension FissionDesktopUITests {
     @MainActor
     func launchIsolatedApp(
         withInterruptProbe: Bool = false,
-        withSearchFixture: Bool = false
+        withSearchFixture: Bool = false,
+        withRemoteMachine: Bool = false
     ) throws -> TestContext {
         let root = FileManager.default.temporaryDirectory
             .appending(path: "fission-ui-test-\(UUID().uuidString)", directoryHint: .isDirectory)
@@ -320,11 +321,20 @@ extension FissionDesktopUITests {
         )
 
         let databaseURL = root.appending(path: "fission.sqlite")
+        let remoteMachinesURL = root.appending(path: "remote-machines.json")
+        if withRemoteMachine {
+            let machine = """
+            [{"host":"gpu.example","id":"11111111-1111-1111-1111-111111111111","name":"Studio","username":"ada"}]
+            """
+            try machine.write(to: remoteMachinesURL, atomically: true, encoding: .utf8)
+        }
+
         let app = XCUIApplication()
         app.launchArguments += [
             "-ApplePersistenceIgnoreState", "YES",
             "-createThreadsInNewWorktree", "NO",
-            "-FissionDatabasePath", databaseURL.path
+            "-FissionDatabasePath", databaseURL.path,
+            "-FissionRemoteMachinesPath", remoteMachinesURL.path
         ]
         app.launchEnvironment["HOME"] = root.path
         app.launchEnvironment["CFFIXED_USER_HOME"] = root.path

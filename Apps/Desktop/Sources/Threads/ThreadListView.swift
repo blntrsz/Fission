@@ -8,6 +8,7 @@ struct ThreadListView: View {
     let model: ThreadListModel
     let agentActivityModel: AgentActivityModel
     let navigationModel: DesktopNavigationModel
+    let remoteMachineStore: RemoteMachineStore
     @Environment(\.scenePhase) private var scenePhase
     @State private var workspaceStore: ThreadWorkspaceStore
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
@@ -23,11 +24,13 @@ struct ThreadListView: View {
     init(
         model: ThreadListModel,
         agentActivityModel: AgentActivityModel,
-        navigationModel: DesktopNavigationModel
+        navigationModel: DesktopNavigationModel,
+        remoteMachineStore: RemoteMachineStore
     ) {
         self.model = model
         self.agentActivityModel = agentActivityModel
         self.navigationModel = navigationModel
+        self.remoteMachineStore = remoteMachineStore
         _workspaceStore = State(
             initialValue: ThreadWorkspaceStore(agentActivityModel: agentActivityModel)
         )
@@ -81,7 +84,8 @@ struct ThreadListView: View {
         .sheet(isPresented: $isCreatingThread) {
             NewThreadSheet(
                 recentPaths: recentProjectPaths,
-                create: createThread(in:createWorktree:),
+                machines: remoteMachineStore.machines,
+                create: createThread(_:),
                 cancel: { isCreatingThread = false }
             )
         }
@@ -328,22 +332,32 @@ struct ThreadListView: View {
         }
     }
 
-    private func createThread(
-        in directory: URL,
-        createWorktree: Bool
-    ) {
-        RecentProjectPaths.record(directory)
-        recentProjectPaths = RecentProjectPaths.load()
+    private func createThread(_ request: NewThreadRequest) {
         isCreatingThread = false
 
-        Task {
-            if let threadID = await DesktopThreadCreator.create(
-                in: model,
-                workingDirectory: directory.path,
-                createWorktree: createWorktree
-            ) {
-                mostRecentlyCreatedThreadID = threadID
-                navigationModel.select(threadID: threadID)
+        switch request {
+        case let .local(directory, createWorktree):
+            RecentProjectPaths.record(directory)
+            recentProjectPaths = RecentProjectPaths.load()
+            Task {
+                if let threadID = await DesktopThreadCreator.create(
+                    in: model,
+                    workingDirectory: directory.path,
+                    createWorktree: createWorktree
+                ) {
+                    mostRecentlyCreatedThreadID = threadID
+                    navigationModel.select(threadID: threadID)
+                }
+            }
+        case let .remote(machine):
+            Task {
+                if let threadID = await DesktopThreadCreator.createRemote(
+                    in: model,
+                    machine: machine
+                ) {
+                    mostRecentlyCreatedThreadID = threadID
+                    navigationModel.select(threadID: threadID)
+                }
             }
         }
     }
@@ -413,7 +427,7 @@ private struct ThreadRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
-                Image(systemName: "folder")
+                Image(systemName: thread.isRemote ? "network" : "folder")
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
@@ -453,7 +467,7 @@ private struct ThreadRow: View {
             .padding(.bottom, 6)
 
             HStack(spacing: 10) {
-                GitBranchLabel(workingDirectory: thread.workingDirectory)
+                GitBranchLabel(workingDirectory: thread.isRemote ? nil : thread.workingDirectory)
                 Spacer(minLength: 0)
                 if !activityStates.isEmpty {
                     AgentActivityIndicators(states: activityStates)
@@ -640,6 +654,7 @@ enum GitBranchResolver {
     ThreadListView(
         model: ThreadListModel(databasePath: ":memory:"),
         agentActivityModel: AgentActivityModel(installPiIntegration: false),
-        navigationModel: DesktopNavigationModel()
+        navigationModel: DesktopNavigationModel(),
+        remoteMachineStore: RemoteMachineStore()
     )
 }

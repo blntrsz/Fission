@@ -13,12 +13,14 @@ final class PersistentTerminalSession: @unchecked Sendable {
         id: UUID,
         threadID: UUID,
         workingDirectory: String?,
+        startupCommand: String?,
         environment: [String: String]
     ) {
         connection = TerminalDaemonConnection(
             sessionID: id,
             threadID: threadID,
             workingDirectory: workingDirectory,
+            startupCommand: startupCommand,
             environment: environment
         )
 
@@ -104,6 +106,7 @@ private final class TerminalDaemonConnection: @unchecked Sendable {
 
     private let threadID: UUID
     private let workingDirectory: String?
+    private let startupCommand: String?
     private let environment: [String: String]
     private let queue = DispatchQueue(label: "com.fission.terminal-connection")
     private var descriptor: Int32 = -1
@@ -118,11 +121,13 @@ private final class TerminalDaemonConnection: @unchecked Sendable {
         sessionID: UUID,
         threadID: UUID,
         workingDirectory: String?,
+        startupCommand: String?,
         environment: [String: String]
     ) {
         self.sessionID = sessionID
         self.threadID = threadID
         self.workingDirectory = workingDirectory
+        self.startupCommand = startupCommand
         self.environment = environment
     }
 
@@ -214,6 +219,7 @@ private final class TerminalDaemonConnection: @unchecked Sendable {
                 sessionID: sessionID,
                 threadID: threadID,
                 workingDirectory: workingDirectory,
+                startupCommand: startupCommand,
                 environment: environment,
                 resumeOffset: nextOutputOffset
             )

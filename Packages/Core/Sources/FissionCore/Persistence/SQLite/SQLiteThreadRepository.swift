@@ -11,6 +11,8 @@ private struct ThreadRecord: Codable, FetchableRecord, PersistableRecord, Sendab
     var status: String
     var workingDirectory: String?
     var projectName: String?
+    var remoteMachineID: String?
+    var remoteCommand: String?
     var createdAt: Date
     var updatedAt: Date
 
@@ -20,6 +22,8 @@ private struct ThreadRecord: Codable, FetchableRecord, PersistableRecord, Sendab
         case status
         case workingDirectory = "working_directory"
         case projectName = "project_name"
+        case remoteMachineID = "remote_machine_id"
+        case remoteCommand = "remote_command"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }
@@ -35,6 +39,8 @@ private struct ThreadRecord: Codable, FetchableRecord, PersistableRecord, Sendab
         status = thread.status.rawValue
         workingDirectory = thread.workingDirectory
         projectName = thread.projectName
+        remoteMachineID = thread.remoteMachineID?.uuidString
+        remoteCommand = thread.remoteCommand
         createdAt = thread.createdAt
         updatedAt = thread.updatedAt
     }
@@ -45,12 +51,15 @@ private struct ThreadRecord: Codable, FetchableRecord, PersistableRecord, Sendab
             throw SQLiteRepositoryError.invalidStoredThread
         }
 
+        let remoteMachineID = remoteMachineID.flatMap(UUID.init(uuidString:))
         return AgentThread(
             id: id,
             title: title,
             status: status,
             workingDirectory: workingDirectory,
             projectName: projectName,
+            remoteMachineID: remoteMachineID,
+            remoteCommand: remoteCommand,
             createdAt: createdAt,
             updatedAt: updatedAt
         )
@@ -84,6 +93,7 @@ public actor SQLiteThreadRepository {
         registerWorkingDirectoryMigration(in: &migrator)
         registerSettledStatusMigration(in: &migrator)
         registerProjectNameMigration(in: &migrator)
+        registerRemoteThreadMigration(in: &migrator)
         return migrator
     }
 
@@ -151,6 +161,15 @@ public actor SQLiteThreadRepository {
         migrator.registerMigration("addThreadProjectName") { db in
             try db.alter(table: ThreadRecord.databaseTableName) { table in
                 table.add(column: "project_name", .text)
+            }
+        }
+    }
+
+    private static func registerRemoteThreadMigration(in migrator: inout DatabaseMigrator) {
+        migrator.registerMigration("addThreadRemoteMachine") { db in
+            try db.alter(table: ThreadRecord.databaseTableName) { table in
+                table.add(column: "remote_machine_id", .text)
+                table.add(column: "remote_command", .text)
             }
         }
     }

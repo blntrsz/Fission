@@ -53,4 +53,17 @@ struct ActiveThreadSearchTests {
 
         #expect(results.map(\.id) == [matching.id])
     }
+
+    @Test func queryMatchesRemoteProjectName() {
+        let remote = AgentThread(
+            title: "ada@gpu.local",
+            projectName: "Studio",
+            remoteCommand: "exec mosh ada@gpu.local"
+        )
+
+        #expect(
+            ActiveThreadSearch.results(matching: "studio", in: [remote]).map(\.id) == [remote.id]
+        )
+        #expect(ActiveThreadSearch.context(for: remote) == "Studio")
+    }
 }

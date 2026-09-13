@@ -11,6 +11,8 @@ struct SQLiteThreadRepositoryTests {
             title: "Initial title",
             workingDirectory: "/tmp/worktrees/project/branch",
             projectName: "project",
+            remoteMachineID: UUID(uuidString: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE"),
+            remoteCommand: "exec mosh ada@gpu.local",
             createdAt: createdAt
         )
 

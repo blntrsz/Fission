@@ -15,10 +15,13 @@ public struct AgentThread: Identifiable, Hashable, Sendable {
     public private(set) var status: Status
     public let workingDirectory: String?
     public let projectName: String?
+    public let remoteMachineID: UUID?
+    public let remoteCommand: String?
     public let createdAt: Date
     public private(set) var updatedAt: Date
 
     public var isSettled: Bool { status == .settled }
+    public var isRemote: Bool { remoteCommand != nil || remoteMachineID != nil }
 
     public init(
         id: UUID = UUID(),
@@ -26,6 +29,8 @@ public struct AgentThread: Identifiable, Hashable, Sendable {
         status: Status = .active,
         workingDirectory: String? = nil,
         projectName: String? = nil,
+        remoteMachineID: UUID? = nil,
+        remoteCommand: String? = nil,
         createdAt: Date = .now,
         updatedAt: Date? = nil
     ) {
@@ -34,6 +39,8 @@ public struct AgentThread: Identifiable, Hashable, Sendable {
         self.status = status
         self.workingDirectory = workingDirectory
         self.projectName = projectName
+        self.remoteMachineID = remoteMachineID
+        self.remoteCommand = remoteCommand
         self.createdAt = createdAt
         self.updatedAt = updatedAt ?? createdAt
     }

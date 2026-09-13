@@ -55,6 +55,19 @@ struct ThreadListModelTests {
         #expect(thread?.title == "Ship Fission")
         #expect(thread?.workingDirectory == "/tmp/fission-worktrees/branch")
         #expect(thread?.projectName == "Fission")
+        #expect(thread?.isRemote == false)
+
+        let remoteID = UUID()
+        let remoteThreadID = await model.createThread(
+            title: "gpu.local",
+            projectName: "Studio",
+            remoteMachineID: remoteID,
+            remoteCommand: "exec mosh ada@gpu.local"
+        )
+        let remote = model.threads.first { $0.id == remoteThreadID }
+        #expect(remote?.isRemote == true)
+        #expect(remote?.remoteMachineID == remoteID)
+        #expect(remote?.remoteCommand == "exec mosh ada@gpu.local")
 
         let count = model.threads.count
         #expect(await model.createThread(title: " \n ") == nil)
