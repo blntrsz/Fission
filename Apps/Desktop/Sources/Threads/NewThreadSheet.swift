@@ -118,7 +118,8 @@ struct NewThreadSheet: View {
                         .font(.title2.bold())
                     Text(location == .local
                          ? "Choose the project directory where the agent should work."
-                         : "Choose a remote machine, then pick a folder. Available directories at that path are listed.")
+                         : "Choose a remote machine, then pick a folder. "
+                            + "Available directories at that path are listed.")
                         .foregroundStyle(.secondary)
                 }
 
