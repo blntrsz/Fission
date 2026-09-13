@@ -24,11 +24,9 @@ extension FissionDesktopUITests {
             app.radioButtons["Remote"].click()
         }
 
-        XCTAssertTrue(
-            app.staticTexts["No Remote Machines"].waitForExistence(timeout: 5),
-            "Remote should explain how to register a host when none exist."
-        )
+        XCTAssertTrue(app.staticTexts["No Remote Machines"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["open-remote-machine-settings"].exists)
+        XCTAssertTrue(app.textFields["remote-project-path-field"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["create-thread-button"].isEnabled)
     }
 
@@ -61,13 +59,17 @@ extension FissionDesktopUITests {
         )
         machine.click()
 
+        let projectPath = app.textFields["remote-project-path-field"]
+        XCTAssertTrue(projectPath.waitForExistence(timeout: 5))
+        XCTAssertEqual(projectPath.value as? String, "/work/fission")
+
         let createButton = app.buttons["create-thread-button"]
         waitUntilEnabled(createButton)
         createButton.click()
 
         XCTAssertTrue(
-            app.staticTexts["Studio"].waitForExistence(timeout: 10),
-            "The remote Thread should use the machine name as its project."
+            app.staticTexts["fission"].waitForExistence(timeout: 10),
+            "The remote Thread should use the project path name."
         )
         XCTAssertTrue(
             app.descendants(matching: .any)["terminal-workspace"].waitForExistence(timeout: 10),
@@ -124,8 +126,14 @@ extension FissionDesktopUITests {
         hostField.click()
         hostField.typeText("gpu.example")
 
+        let pathField = app.textFields["remote-machine-project-path-field"]
+        XCTAssertTrue(pathField.waitForExistence(timeout: 5))
+        pathField.click()
+        pathField.typeText("/work/fission")
+
         app.buttons["save-remote-machine-button"].click()
         XCTAssertTrue(app.staticTexts["Studio"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["gpu.example"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["/work/fission"].waitForExistence(timeout: 5))
     }
 }

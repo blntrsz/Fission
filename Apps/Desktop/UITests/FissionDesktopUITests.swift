@@ -373,7 +373,7 @@ extension FissionDesktopUITests {
         let remoteMachinesURL = root.appending(path: "remote-machines.json")
         if withRemoteMachine {
             let machine = """
-            [{"host":"gpu.example","id":"11111111-1111-1111-1111-111111111111","name":"Studio","username":"ada"}]
+            [{"host":"gpu.example","id":"11111111-1111-1111-1111-111111111111","name":"Studio","projectPath":"/work/fission","username":"ada"}]
             """
             try machine.write(to: remoteMachinesURL, atomically: true, encoding: .utf8)
         }

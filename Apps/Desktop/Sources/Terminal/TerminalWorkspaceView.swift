@@ -190,7 +190,7 @@ final class TerminalTabsViewModel: Identifiable {
             number: number,
             title: title,
             threadID: threadID,
-            workingDirectory: workingDirectory,
+            workingDirectory: remoteCommand == nil ? workingDirectory : nil,
             startupCommand: remoteCommand,
             agentActivityModel: agentActivityModel,
             didRename: { [weak self] in self?.persist() }
