@@ -20,6 +20,10 @@ _Avoid_: Completed Thread, archived Thread
 A transient attention state for an agent in a Thread: Idle, Running, Blocked, or Finished. It is distinct from the Thread lifecycle and defaults to Idle when no activity is known.
 _Avoid_: Working state, Thread status
 
-**Finished Activity**:
-Agent activity that completed and has not yet been acknowledged by selecting its Thread. Acknowledgement returns the activity to Idle.
-_Avoid_: Unread agent, completed Thread
+**Remote Machine**:
+A registered host Desktop can open with mosh.
+_Avoid_: SSH target, server bookmark
+
+**Remote Thread**:
+A Thread whose terminals start already connected to a Remote Machine over mosh.
+_Avoid_: SSH session, remote tab

@@ -29,7 +29,6 @@ struct NotificationSettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 440)
         .task {
             authorizationStatus = await coordinator.authorizationStatus()
         }

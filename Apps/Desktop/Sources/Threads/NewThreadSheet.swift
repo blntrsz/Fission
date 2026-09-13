@@ -1,28 +1,49 @@
+// swiftlint:disable file_length
+
+import FissionCore
 import SwiftUI
+
+enum NewThreadRequest: Equatable {
+    case local(URL, createWorktree: Bool)
+    case remote(RemoteMachine)
+}
 
 struct NewThreadSheet: View {
     let recentPaths: [String]
-    let create: (URL, Bool) -> Void
+    let machines: [RemoteMachine]
+    let create: (NewThreadRequest) -> Void
     let cancel: () -> Void
 
     @State private var query = ""
     @State private var selectedIndex = 0
+    @State private var selectedMachineID: UUID?
     @AppStorage("createThreadsInNewWorktree") private var createInNewWorktree = false
+    @AppStorage("newThreadLocation") private var locationRaw = NewThreadLocation.local.rawValue
     @FocusState private var focusedField: Field?
 
     var body: some View {
         VStack(spacing: 0) {
             header
-            projectList
+            if location == .local {
+                projectList
+            } else {
+                remoteList
+            }
             footer
         }
         .frame(width: 720, height: 540)
         .background(.regularMaterial)
         .task {
-            focusedField = .project
+            if selectedMachineID == nil {
+                selectedMachineID = machines.first?.id
+            }
+            focusedField = location == .local ? .project : nil
         }
         .onChange(of: query) { _, _ in
             selectedIndex = projects.isEmpty ? -1 : 0
+        }
+        .onChange(of: location) { _, location in
+            focusedField = location == .local ? .project : nil
         }
         .onKeyPress(.upArrow) {
             moveSelection(by: -1)
@@ -38,11 +59,15 @@ struct NewThreadSheet: View {
             return .handled
         }
         .onKeyPress(.tab) {
-            guard focusedField == .project else { return .ignored }
+            guard location == .local, focusedField == .project else { return .ignored }
             completeSelectedProject()
             return .handled
         }
         .onExitCommand(perform: cancel)
+    }
+
+    private var location: NewThreadLocation {
+        NewThreadLocation(rawValue: locationRaw) ?? .local
     }
 
     private var header: some View {
@@ -51,7 +76,9 @@ struct NewThreadSheet: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("New Thread")
                         .font(.title2.bold())
-                    Text("Choose the project directory where the agent should work.")
+                    Text(location == .local
+                         ? "Choose the project directory where the agent should work."
+                         : "Choose a remote machine. The terminal opens already connected with mosh.")
                         .foregroundStyle(.secondary)
                 }
 
@@ -69,13 +96,26 @@ struct NewThreadSheet: View {
                 .help("Close")
             }
 
-            field(
-                title: "Project folder",
-                systemImage: "magnifyingglass",
-                placeholder: "Search projects or enter ./, ~/, or /",
-                text: $query,
-                focus: .project
-            )
+            Picker("Location", selection: locationBinding) {
+                Text("This Mac")
+                    .tag(NewThreadLocation.local)
+                    .accessibilityIdentifier("new-thread-location-local")
+                Text("Remote")
+                    .tag(NewThreadLocation.remote)
+                    .accessibilityIdentifier("new-thread-location-remote")
+            }
+            .pickerStyle(.segmented)
+            .accessibilityIdentifier("new-thread-location-picker")
+
+            if location == .local {
+                field(
+                    title: "Project folder",
+                    systemImage: "magnifyingglass",
+                    placeholder: "Search projects or enter ./, ~/, or /",
+                    text: $query,
+                    focus: .project
+                )
+            }
         }
         .padding(24)
     }
@@ -208,16 +248,18 @@ struct NewThreadSheet: View {
 
             Spacer()
 
-            Toggle("New worktree", isOn: $createInNewWorktree)
-                .toggleStyle(.switch)
-                .help("Create an isolated Git branch and use its checkout for this Thread.")
+            if location == .local {
+                Toggle("New worktree", isOn: $createInNewWorktree)
+                    .toggleStyle(.switch)
+                    .help("Create an isolated Git branch and use its checkout for this Thread.")
+            }
 
             Button("Create Thread") {
-                createSelectedProject()
+                createSelected()
             }
             .accessibilityIdentifier("create-thread-button")
             .keyboardShortcut(.defaultAction)
-            .disabled(projects.isEmpty)
+            .disabled(!canCreate)
         }
         .font(.callout)
         .foregroundStyle(.secondary)
@@ -226,13 +268,116 @@ struct NewThreadSheet: View {
         .background(.bar)
     }
 
+    private var remoteList: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Machines")
+                .font(.headline)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 24)
+
+            if machines.isEmpty {
+                ContentUnavailableView {
+                    Label("No Remote Machines", systemImage: "network")
+                } description: {
+                    Text("Add a host in Settings, then open it as a remote Thread.")
+                } actions: {
+                    SettingsLink {
+                        Label("Open Settings", systemImage: "gearshape")
+                    }
+                    .accessibilityIdentifier("open-remote-machine-settings")
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 4) {
+                        ForEach(machines) { machine in
+                            remoteRow(machine)
+                        }
+                    }
+                    .padding(.horizontal, 14)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityIdentifier("remote-machine-list")
+    }
+
+    private func remoteRow(_ machine: RemoteMachine) -> some View {
+        Button {
+            selectedMachineID = machine.id
+        } label: {
+            HStack(spacing: 14) {
+                Image(systemName: "network")
+                    .font(.title2)
+                    .foregroundStyle(.secondary)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(machine.displayName)
+                        .font(.title3)
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                    Text(machine.target)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+
+                Spacer()
+            }
+            .padding(.horizontal, 16)
+            .frame(height: 64)
+            .contentShape(Rectangle())
+            .background(
+                selectedMachineID == machine.id ? Color.accentColor.opacity(0.18) : Color.clear,
+                in: RoundedRectangle(cornerRadius: 10)
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("remote-machine-\(machine.id.uuidString)")
+        .simultaneousGesture(
+            TapGesture(count: 2).onEnded {
+                selectedMachineID = machine.id
+                createSelected()
+            }
+        )
+    }
+
+    private var locationBinding: Binding<NewThreadLocation> {
+        Binding(
+            get: { location },
+            set: { locationRaw = $0.rawValue }
+        )
+    }
+
     private var projects: [ProjectPath] {
         ProjectPathResolver.projects(matching: query, recentPaths: recentPaths)
     }
 
+    private var canCreate: Bool {
+        switch location {
+        case .local:
+            !projects.isEmpty
+        case .remote:
+            selectedMachine != nil
+        }
+    }
+
+    private var selectedMachine: RemoteMachine? {
+        machines.first { $0.id == selectedMachineID } ?? machines.first
+    }
+
     private func moveSelection(by offset: Int) {
-        guard !projects.isEmpty else { return }
-        selectedIndex = min(max(selectedIndex + offset, 0), projects.count - 1)
+        switch location {
+        case .local:
+            guard !projects.isEmpty else { return }
+            selectedIndex = min(max(selectedIndex + offset, 0), projects.count - 1)
+        case .remote:
+            guard !machines.isEmpty else { return }
+            let current = machines.firstIndex { $0.id == selectedMachineID } ?? 0
+            let next = min(max(current + offset, 0), machines.count - 1)
+            selectedMachineID = machines[next].id
+        }
     }
 
     private func completeSelectedProject() {
@@ -264,14 +409,25 @@ struct NewThreadSheet: View {
         return path.hasSuffix("/") ? path : path + "/"
     }
 
-    private func createSelectedProject() {
-        guard projects.indices.contains(selectedIndex) else { return }
-        create(projects[selectedIndex].url, createInNewWorktree)
+    private func createSelected() {
+        switch location {
+        case .local:
+            guard projects.indices.contains(selectedIndex) else { return }
+            create(.local(projects[selectedIndex].url, createWorktree: createInNewWorktree))
+        case .remote:
+            guard let selectedMachine else { return }
+            create(.remote(selectedMachine))
+        }
     }
 }
 
 private enum Field: Hashable {
     case project
+}
+
+private enum NewThreadLocation: String {
+    case local
+    case remote
 }
 
 private struct ProjectPath: Identifiable {

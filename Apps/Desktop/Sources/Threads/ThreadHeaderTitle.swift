@@ -46,7 +46,7 @@ struct ThreadHeaderTitle: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: "folder")
+            Image(systemName: thread.isRemote ? "network" : "folder")
                 .foregroundStyle(.secondary)
 
             Text(projectName)

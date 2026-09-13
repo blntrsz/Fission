@@ -221,6 +221,7 @@ private final class TerminalExecutionDaemon {
                     id: request.sessionID,
                     threadID: threadID,
                     workingDirectory: request.workingDirectory,
+                    startupCommand: request.startupCommand,
                     environment: request.environment ?? [:]
                 )
                 terminals[terminal.id] = terminal
@@ -275,6 +276,7 @@ private final class TerminalExecutionDaemon {
         id: UUID,
         threadID: UUID,
         workingDirectory: String?,
+        startupCommand: String?,
         environment additions: [String: String]
     ) throws -> HostedTerminal {
         var controllerDescriptor: Int32 = -1
@@ -328,7 +330,10 @@ private final class TerminalExecutionDaemon {
         // posix_spawn cannot run TIOCSCTTY between creating the new session and
         // execing the shell. Re-enter this executable for that one child-only step.
         let launcher = CommandLine.arguments[0]
-        let arguments = [launcher, "--terminal-child", shell]
+        var arguments = [launcher, "--terminal-child", shell]
+        if let startupCommand, !startupCommand.isEmpty {
+            arguments.append(startupCommand)
+        }
         let environmentEntries = environment.map { "\($0.key)=\($0.value)" }
         let spawnResult = withCStringArray(arguments) { argumentPointers in
             withCStringArray(environmentEntries) { environmentPointers in
@@ -600,7 +605,7 @@ private func withCStringArray<Result>(
 }
 
 /// Completes PTY setup after `POSIX_SPAWN_SETSID`, then becomes the user's shell.
-private func runTerminalChild(shell: String) -> Never {
+private func runTerminalChild(shell: String, startupCommand: String?) -> Never {
     guard ioctl(STDIN_FILENO, TIOCSCTTY, 0) == 0 else {
         FileHandle.standardError.write(
             Data("FissionExecution: could not set the controlling terminal: \(currentPOSIXError())\n".utf8)
@@ -615,7 +620,12 @@ private func runTerminalChild(shell: String) -> Never {
     }
 
     signal(SIGPIPE, SIG_DFL)
-    let shellArguments = [shell, "-l"]
+    let shellArguments: [String]
+    if let startupCommand, !startupCommand.isEmpty {
+        shellArguments = [shell, "-l", "-c", startupCommand]
+    } else {
+        shellArguments = [shell, "-l"]
+    }
     withCStringArray(shellArguments) { pointers in
         execv(shell, pointers)
     }
@@ -628,7 +638,10 @@ private func runTerminalChild(shell: String) -> Never {
 let arguments = CommandLine.arguments
 if let childIndex = arguments.firstIndex(of: "--terminal-child"),
    arguments.indices.contains(childIndex + 1) {
-    runTerminalChild(shell: arguments[childIndex + 1])
+    let startupCommand = arguments.indices.contains(childIndex + 2)
+        ? arguments[childIndex + 2]
+        : nil
+    runTerminalChild(shell: arguments[childIndex + 1], startupCommand: startupCommand)
 }
 
 let socketPath: String

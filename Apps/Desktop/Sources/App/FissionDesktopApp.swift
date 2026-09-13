@@ -31,6 +31,7 @@ struct FissionDesktopApp: App {
     @State private var threadListModel: ThreadListModel
     @State private var agentActivityModel: AgentActivityModel
     @State private var navigationModel: DesktopNavigationModel
+    @State private var remoteMachineStore: RemoteMachineStore
     private let notificationCoordinator: AgentTaskNotificationCoordinator
     private let updateController: ApplicationUpdateController
 
@@ -88,6 +89,7 @@ struct FissionDesktopApp: App {
 
         _threadListModel = State(initialValue: threadListModel)
         _navigationModel = State(initialValue: navigationModel)
+        _remoteMachineStore = State(initialValue: RemoteMachineStore())
         _agentActivityModel = State(initialValue: AgentActivityModel(
             notificationAdapter: notificationCoordinator
         ))
@@ -117,7 +119,8 @@ struct FissionDesktopApp: App {
             ThreadListView(
                 model: threadListModel,
                 agentActivityModel: agentActivityModel,
-                navigationModel: navigationModel
+                navigationModel: navigationModel,
+                remoteMachineStore: remoteMachineStore
             )
             .frame(minWidth: 900, minHeight: 560)
         }
@@ -126,7 +129,18 @@ struct FissionDesktopApp: App {
         }
 
         Settings {
-            NotificationSettingsView(coordinator: notificationCoordinator)
+            TabView {
+                NotificationSettingsView(coordinator: notificationCoordinator)
+                    .tabItem {
+                        Label("Notifications", systemImage: "bell")
+                    }
+
+                RemoteMachinesSettingsView(store: remoteMachineStore)
+                    .tabItem {
+                        Label("Remote Machines", systemImage: "network")
+                    }
+            }
+            .frame(width: 520, height: 420)
         }
     }
 }

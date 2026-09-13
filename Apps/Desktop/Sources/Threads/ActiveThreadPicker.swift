@@ -173,7 +173,9 @@ enum ActiveThreadSearch {
         return activeThreads.filter { thread in
             let searchableText = [
                 thread.title,
-                thread.workingDirectory
+                thread.projectName,
+                thread.workingDirectory,
+                thread.remoteCommand
             ]
             .compactMap { $0 }
             .joined(separator: " ")
@@ -185,6 +187,9 @@ enum ActiveThreadSearch {
     }
 
     static func context(for thread: AgentThread) -> String? {
+        if let projectName = thread.projectName, !projectName.isEmpty {
+            return projectName
+        }
         guard let workingDirectory = thread.workingDirectory else { return nil }
         let directoryName = URL(fileURLWithPath: workingDirectory).lastPathComponent
         return directoryName.isEmpty ? workingDirectory : directoryName

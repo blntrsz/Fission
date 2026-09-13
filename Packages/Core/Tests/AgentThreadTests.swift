@@ -47,6 +47,20 @@ struct AgentThreadTests {
         #expect(thread.updatedAt == completedAt)
     }
 
+    @Test func remoteThreadsKeepMoshCommand() {
+        let machineID = UUID()
+        let thread = AgentThread(
+            title: "ada@gpu.local",
+            projectName: "Studio",
+            remoteMachineID: machineID,
+            remoteCommand: "exec mosh ada@gpu.local"
+        )
+
+        #expect(thread.isRemote)
+        #expect(thread.remoteMachineID == machineID)
+        #expect(thread.workingDirectory == nil)
+    }
+
     @Test func placingDoesNotChangeUpdatedAt() {
         let createdAt = Date(timeIntervalSince1970: 1_000)
         var thread = AgentThread(title: "Research", createdAt: createdAt)

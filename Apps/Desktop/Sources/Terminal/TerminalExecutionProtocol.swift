@@ -16,9 +16,9 @@ enum TerminalExecutionResponseKind: String, Codable, Sendable {
 }
 
 enum TerminalExecutionProtocol {
-    // Version 2 prevents upgraded clients from reconnecting to helpers created
-    // before terminal children acquired a controlling PTY and foreground group.
-    static let version = 2
+    // Version 3 adds an optional login-shell startup command so remote Threads
+    // can exec mosh instead of dropping into a local shell.
+    static let version = 3
     static let replayByteLimit = 4 * 1_024 * 1_024
 
     struct Request: Codable, Sendable {
@@ -27,6 +27,7 @@ enum TerminalExecutionProtocol {
         let sessionID: UUID
         var threadID: UUID?
         var workingDirectory: String?
+        var startupCommand: String?
         var environment: [String: String]?
         var data: Data?
         var columns: UInt16?
@@ -37,6 +38,7 @@ enum TerminalExecutionProtocol {
             sessionID: UUID,
             threadID: UUID,
             workingDirectory: String?,
+            startupCommand: String?,
             environment: [String: String],
             resumeOffset: UInt64
         ) -> Self {
@@ -46,6 +48,7 @@ enum TerminalExecutionProtocol {
                 sessionID: sessionID,
                 threadID: threadID,
                 workingDirectory: workingDirectory,
+                startupCommand: startupCommand,
                 environment: environment,
                 resumeOffset: resumeOffset
             )
@@ -84,6 +87,7 @@ enum TerminalExecutionProtocol {
             sessionID: UUID,
             threadID: UUID? = nil,
             workingDirectory: String? = nil,
+            startupCommand: String? = nil,
             environment: [String: String]? = nil,
             data: Data? = nil,
             columns: UInt16? = nil,
@@ -95,6 +99,7 @@ enum TerminalExecutionProtocol {
             self.sessionID = sessionID
             self.threadID = threadID
             self.workingDirectory = workingDirectory
+            self.startupCommand = startupCommand
             self.environment = environment
             self.data = data
             self.columns = columns
