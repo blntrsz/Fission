@@ -17,6 +17,7 @@ public struct AgentThread: Identifiable, Hashable, Sendable {
     public let projectName: String?
     public let createdAt: Date
     public private(set) var updatedAt: Date
+    public private(set) var sortIndex: Int
 
     public var isSettled: Bool { status == .settled }
 
@@ -27,7 +28,8 @@ public struct AgentThread: Identifiable, Hashable, Sendable {
         workingDirectory: String? = nil,
         projectName: String? = nil,
         createdAt: Date = .now,
-        updatedAt: Date? = nil
+        updatedAt: Date? = nil,
+        sortIndex: Int = 0
     ) {
         self.id = id
         self.title = title
@@ -36,6 +38,7 @@ public struct AgentThread: Identifiable, Hashable, Sendable {
         self.projectName = projectName
         self.createdAt = createdAt
         self.updatedAt = updatedAt ?? createdAt
+        self.sortIndex = sortIndex
     }
 
     public mutating func rename(to title: String, at date: Date = .now) {
@@ -46,5 +49,9 @@ public struct AgentThread: Identifiable, Hashable, Sendable {
     public mutating func transition(to status: Status, at date: Date = .now) {
         self.status = status
         updatedAt = date
+    }
+
+    public mutating func place(at sortIndex: Int) {
+        self.sortIndex = sortIndex
     }
 }

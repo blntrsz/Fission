@@ -120,6 +120,31 @@ public final class ThreadListModel {
         }
     }
 
+    public func reorderActiveThreads(ids: [UUID]) async {
+        guard let repository, didLoad else { return }
+
+        let activeIDs = threads.filter { !$0.isSettled }.map(\.id)
+        guard ids.count == activeIDs.count, Set(ids) == Set(activeIDs) else { return }
+
+        let threadsByID = Dictionary(uniqueKeysWithValues: threads.map { ($0.id, $0) })
+        var reordered: [AgentThread] = []
+        reordered.reserveCapacity(ids.count)
+        for (index, id) in ids.enumerated() {
+            guard var thread = threadsByID[id] else { return }
+            thread.place(at: index)
+            reordered.append(thread)
+        }
+        threads = reordered + threads.filter(\.isSettled)
+
+        do {
+            try await repository.reorder(ids: ids)
+            try await refresh(using: repository)
+        } catch {
+            errorMessage = error.localizedDescription
+            try? await refresh(using: repository)
+        }
+    }
+
     private func transition(threadID: UUID, to status: AgentThread.Status) async {
         guard let repository,
               didLoad,

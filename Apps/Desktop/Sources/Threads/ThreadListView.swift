@@ -140,6 +140,7 @@ struct ThreadListView: View {
                         .onDelete { offsets in
                             deleteThreads(at: offsets, from: activeThreads)
                         }
+                        .onMove(perform: moveActiveThreads)
 
                         if !settledThreads.isEmpty {
                             settledThreadsAccordion
@@ -183,6 +184,7 @@ struct ThreadListView: View {
                         }
                     }
                     .listStyle(.sidebar)
+                    .accessibilityIdentifier("thread-sidebar-list")
                     .onChange(of: mostRecentlyCreatedThreadID) { _, threadID in
                         guard let threadID else { return }
                         proxy.scrollTo(threadID, anchor: .top)
@@ -265,11 +267,23 @@ struct ThreadListView: View {
     }
 
     private var activeThreads: [AgentThread] {
-        model.threads.filter { !$0.isSettled }
+        model.threads
+            .filter { !$0.isSettled }
+            .sorted { lhs, rhs in
+                if lhs.sortIndex != rhs.sortIndex {
+                    return lhs.sortIndex < rhs.sortIndex
+                }
+                if lhs.updatedAt != rhs.updatedAt {
+                    return lhs.updatedAt > rhs.updatedAt
+                }
+                return lhs.id.uuidString < rhs.id.uuidString
+            }
     }
 
     private var settledThreads: [AgentThread] {
-        model.threads.filter(\.isSettled)
+        model.threads
+            .filter(\.isSettled)
+            .sorted { $0.updatedAt > $1.updatedAt }
     }
 
     private var displayedSettledThreads: [AgentThread] {
@@ -314,6 +328,12 @@ struct ThreadListView: View {
         let ids = offsets.map { threads[$0].id }
         for id in ids { workspaceStore.terminate(threadID: id) }
         Task { await model.deleteThreads(ids: ids) }
+    }
+
+    private func moveActiveThreads(from offsets: IndexSet, to destination: Int) {
+        var ordered = activeThreads
+        ordered.move(fromOffsets: offsets, toOffset: destination)
+        Task { await model.reorderActiveThreads(ids: ordered.map(\.id)) }
     }
 
     private func settle(_ thread: AgentThread) {
