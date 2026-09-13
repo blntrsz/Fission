@@ -74,21 +74,42 @@ struct ThreadListModelTests {
         #expect(model.errorMessage == nil)
     }
 
-    @Test func settlesReopensAndOrdersByLatestChange() async throws {
+    @Test func settlesReopensAndPreservesManualOrder() async throws {
         let model = ThreadListModel(databasePath: ":memory:")
         await model.load()
         let firstID = try #require(await model.createThread(title: "First"))
         try await Task.sleep(for: .milliseconds(10))
-        _ = await model.createThread(title: "Second")
+        let secondID = try #require(await model.createThread(title: "Second"))
         try await Task.sleep(for: .milliseconds(10))
 
         await model.settle(threadID: firstID)
 
-        #expect(model.threads.first?.id == firstID)
-        #expect(model.threads.first?.isSettled == true)
+        #expect(model.threads.first { $0.id == firstID }?.isSettled == true)
+        #expect(model.threads.filter { !$0.isSettled }.map(\.id).first == secondID)
 
         await model.reopen(threadID: firstID)
         #expect(model.threads.first { $0.id == firstID }?.isSettled == false)
+        #expect(model.threads.filter { !$0.isSettled }.map(\.id) == [secondID, firstID])
+    }
+
+    @Test func reordersActiveThreadsAndKeepsNewThreadsFirst() async throws {
+        let model = ThreadListModel(databasePath: ":memory:")
+        await model.load()
+        let exploreID = try #require(model.threads.first?.id)
+        let firstID = try #require(await model.createThread(title: "First"))
+        let secondID = try #require(await model.createThread(title: "Second"))
+
+        #expect(model.threads.map(\.id) == [secondID, firstID, exploreID])
+
+        await model.reorderActiveThreads(ids: [exploreID, secondID, firstID])
+        #expect(model.threads.map(\.id) == [exploreID, secondID, firstID])
+        #expect(model.errorMessage == nil)
+
+        let thirdID = try #require(await model.createThread(title: "Third"))
+        #expect(model.threads.map(\.id) == [thirdID, exploreID, secondID, firstID])
+
+        await model.rename(threadID: thirdID, to: "Third renamed")
+        #expect(model.threads.map(\.id) == [thirdID, exploreID, secondID, firstID])
     }
 
     @Test func deletesThreadsAndRefreshesState() async throws {
