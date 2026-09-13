@@ -118,7 +118,8 @@ struct NewThreadSheet: View {
                         .font(.title2.bold())
                     Text(location == .local
                          ? "Choose the project directory where the agent should work."
-                         : "Choose a remote machine and project path. Terminals open there over mosh.")
+                         : "Choose a remote machine, then pick a folder. "
+                            + "Available directories at that path are listed.")
                         .foregroundStyle(.secondary)
                 }
 
@@ -399,33 +400,46 @@ struct NewThreadSheet: View {
             ProjectPathResolver.projects(matching: query, recentPaths: recentPaths)
         case .remote:
             RemoteProjectPathResolver.projects(
-                matching: remoteProjectPath,
-                recentPaths: recentRemotePaths,
+                directory: remoteListingTarget?.directory ?? "~",
+                namePrefix: remoteListingTarget?.namePrefix ?? "",
                 childNames: cachedRemoteChildNames,
-                relativeBase: selectedMachine?.projectPath ?? recentRemotePaths.first
+                typedQuery: remoteProjectPath,
+                recentPaths: recentRemotePaths
             )
         }
     }
 
     private var cachedRemoteChildNames: [String]? {
-        guard let key = remoteListingCacheKey else { return nil }
-        return remoteChildNamesByDirectory[key]
+        guard let directory = remoteListingTarget?.directory,
+              let machine = selectedMachine else { return nil }
+        return remoteChildNamesByDirectory[listingCacheKey(machineID: machine.id, directory: directory)]
     }
 
     private var remoteListingID: String {
-        remoteListingCacheKey ?? ""
+        guard location == .remote, let machine = selectedMachine,
+              let directory = remoteListingTarget?.directory else {
+            return ""
+        }
+        return listingCacheKey(machineID: machine.id, directory: directory)
     }
 
-    private var remoteListingCacheKey: String? {
-        guard location == .remote, let machine = selectedMachine else { return nil }
-        let trimmed = remoteProjectPath.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let target = ProjectPathQuery.listingTarget(
-            query: trimmed,
-            relativeBase: machine.projectPath ?? recentRemotePaths.first
-        ) else {
-            return nil
-        }
-        return "\(machine.id.uuidString)\n\(target.directory)"
+    private var remoteListingTarget: (directory: String, namePrefix: String)? {
+        guard location == .remote else { return nil }
+        let relativeBase = selectedMachine?.projectPath ?? recentRemotePaths.first
+        return ProjectPathQuery.resolvedListingTarget(
+            query: ProjectPathQuery.normalizeRemoteQuery(remoteProjectPath),
+            relativeBase: relativeBase,
+            exactChildNames: { directory in
+                guard let machine = selectedMachine else { return nil }
+                return remoteChildNamesByDirectory[
+                    listingCacheKey(machineID: machine.id, directory: directory)
+                ]
+            }
+        )
+    }
+
+    private func listingCacheKey(machineID: UUID, directory: String) -> String {
+        "\(machineID.uuidString)\n\(directory)"
     }
 
     private var canCreate: Bool {
@@ -499,12 +513,11 @@ struct NewThreadSheet: View {
     private func loadRemoteListing() async {
         guard location == .remote,
               let machine = selectedMachine,
-              let key = remoteListingCacheKey else {
+              let directory = remoteListingTarget?.directory else {
             return
         }
+        let key = listingCacheKey(machineID: machine.id, directory: directory)
         if remoteChildNamesByDirectory[key] != nil { return }
-        let directory = String(key.split(separator: "\n", maxSplits: 1).last ?? "")
-        guard !directory.isEmpty else { return }
         try? await Task.sleep(for: .milliseconds(120))
         guard !Task.isCancelled else { return }
         let names = await remoteDirectoryCatalog.childDirectories(on: machine, in: directory)

@@ -25,6 +25,42 @@ struct ProjectPathQueryTests {
         #expect(root?.namePrefix == "")
     }
 
+    @Test func remoteQueriesWithoutAPrefixAreLookedUpUnderHome() {
+        #expect(ProjectPathQuery.normalizeRemoteQuery("") == "~/")
+        #expect(ProjectPathQuery.normalizeRemoteQuery("~") == "~/")
+        #expect(ProjectPathQuery.normalizeRemoteQuery("src") == "~/src")
+        #expect(ProjectPathQuery.normalizeRemoteQuery("/work/fission") == "/work/fission")
+    }
+
+    @Test func exactDirectoryNameBrowsesIntoThatPath() {
+        let target = ProjectPathQuery.resolvedListingTarget(
+            query: "/work/fission",
+            relativeBase: nil,
+            exactChildNames: { directory in
+                directory == "/work" ? ["fission", "notes"] : nil
+            }
+        )
+        #expect(target?.directory == "/work/fission")
+        #expect(target?.namePrefix == "")
+    }
+
+    @Test func pickerListsCurrentDirectoryThenAvailableChildren() {
+        #expect(
+            ProjectPathQuery.pickerPaths(
+                directory: "/work/fission",
+                namePrefix: "",
+                childNames: ["src", "Packages"]
+            ) == ["/work/fission", "/work/fission/Packages", "/work/fission/src"]
+        )
+        #expect(
+            ProjectPathQuery.pickerPaths(
+                directory: "~",
+                namePrefix: "",
+                childNames: ["src", "work"]
+            ) == ["~/src", "~/work"]
+        )
+    }
+
     @Test func relativeQueriesExpandAgainstTheBase() {
         let target = ProjectPathQuery.listingTarget(query: "./fi", relativeBase: "/work")
         #expect(target?.directory == "/work")

@@ -54,13 +54,25 @@ enum ProjectPathResolver {
             return []
         }
 
-        let directoryURL = URL(fileURLWithPath: target.directory).standardizedFileURL
+        var directoryPath = URL(fileURLWithPath: target.directory).standardizedFileURL.path
+        var namePrefix = target.namePrefix
+        if !namePrefix.isEmpty {
+            let candidate = ProjectPathQuery.join(directoryPath, namePrefix)
+            var isDirectory: ObjCBool = false
+            if FileManager.default.fileExists(atPath: candidate, isDirectory: &isDirectory),
+               isDirectory.boolValue {
+                directoryPath = URL(fileURLWithPath: candidate).standardizedFileURL.path
+                namePrefix = ""
+            }
+        }
+
+        let listedURL = URL(fileURLWithPath: directoryPath).standardizedFileURL
         guard let urls = try? FileManager.default.contentsOfDirectory(
-            at: directoryURL,
+            at: listedURL,
             includingPropertiesForKeys: [.isDirectoryKey, .isHiddenKey],
             options: [.skipsHiddenFiles]
         ) else {
-            return []
+            return namePrefix.isEmpty ? [ProjectPath(url: listedURL)] : []
         }
 
         let names = urls.compactMap { url -> String? in
@@ -69,10 +81,10 @@ enum ProjectPathResolver {
             return url.lastPathComponent
         }
 
-        return ProjectPathQuery.childProjects(
-            directory: directoryURL.path,
-            names: names,
-            namePrefix: target.namePrefix
+        return ProjectPathQuery.pickerPaths(
+            directory: listedURL.path,
+            namePrefix: namePrefix,
+            childNames: names
         ).map { ProjectPath(url: URL(fileURLWithPath: $0)) }
     }
 
@@ -89,37 +101,33 @@ enum ProjectPathResolver {
 
 enum RemoteProjectPathResolver {
     static func projects(
-        matching query: String,
-        recentPaths: [String],
+        directory: String,
+        namePrefix: String,
         childNames: [String]?,
-        relativeBase: String?
+        typedQuery: String,
+        recentPaths: [String]
     ) -> [ProjectPath] {
-        let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard ProjectPathQuery.isPathQuery(trimmedQuery) else {
-            return ProjectPathQuery.recentProjects(recentPaths, matching: trimmedQuery)
-                .map { ProjectPath(path: $0) }
-        }
-
-        guard let target = ProjectPathQuery.listingTarget(
-            query: trimmedQuery,
-            relativeBase: relativeBase
-        ) else {
-            return typedPathCandidate(trimmedQuery).map { [$0] } ?? []
-        }
-
         if let childNames {
-            let listed = ProjectPathQuery.childProjects(
-                directory: target.directory,
-                names: childNames,
-                namePrefix: target.namePrefix
+            let listed = ProjectPathQuery.pickerPaths(
+                directory: directory,
+                namePrefix: namePrefix,
+                childNames: childNames
             ).map { ProjectPath(path: $0) }
-            if listed.isEmpty {
-                return typedPathCandidate(trimmedQuery).map { [$0] } ?? []
+            if !listed.isEmpty {
+                return listed
             }
-            return listed
         }
 
-        return typedPathCandidate(trimmedQuery).map { [$0] } ?? []
+        if namePrefix.isEmpty, let current = typedPathCandidate(directory) {
+            return [current]
+        }
+
+        if let typed = typedPathCandidate(typedQuery) {
+            return [typed]
+        }
+
+        return ProjectPathQuery.recentProjects(recentPaths, matching: typedQuery)
+            .map { ProjectPath(path: $0) }
     }
 
     static func typedPathCandidate(_ query: String) -> ProjectPath? {

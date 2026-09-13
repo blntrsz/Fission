@@ -6,6 +6,14 @@ public enum ProjectPathQuery {
         query.hasPrefix("./") || query.hasPrefix("~/") || query.hasPrefix("/")
     }
 
+    /// Remote queries without `./`, `~/`, or `/` are looked up under `~/`.
+    public static func normalizeRemoteQuery(_ query: String) -> String {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty || trimmed == "~" { return "~/" }
+        if isPathQuery(trimmed) { return trimmed }
+        return "~/" + trimmed
+    }
+
     /// Directory to list and the filename prefix to match.
     public static func listingTarget(
         query: String,
@@ -19,6 +27,46 @@ public enum ProjectPathQuery {
             return (stripTrailingSlashes(expanded), "")
         }
         return (parentDirectory(expanded), lastComponent(expanded))
+    }
+
+    /// If the typed last component is an exact directory name, list inside it.
+    public static func resolvedListingTarget(
+        query: String,
+        relativeBase: String?,
+        exactChildNames: ((String) -> [String]?)? = nil
+    ) -> (directory: String, namePrefix: String)? {
+        guard let target = listingTarget(query: query, relativeBase: relativeBase) else {
+            return nil
+        }
+        guard !target.namePrefix.isEmpty,
+              let names = exactChildNames?(target.directory),
+              let exact = names.first(where: {
+                  $0.compare(target.namePrefix, options: [.caseInsensitive]) == .orderedSame
+              }) else {
+            return target
+        }
+        return (join(target.directory, exact), "")
+    }
+
+    /// Children at `directory`, plus the directory itself when browsing inside it.
+    public static func pickerPaths(
+        directory: String,
+        namePrefix: String,
+        childNames: [String]
+    ) -> [String] {
+        let children = childProjects(
+            directory: directory,
+            names: childNames,
+            namePrefix: namePrefix
+        )
+        guard namePrefix.isEmpty,
+              let current = MoshCommand.normalizedDirectory(directory),
+              current != "/",
+              current != "~",
+              current != "." else {
+            return children
+        }
+        return [current] + children.filter { $0 != current }
     }
 
     public static func expandRelative(_ path: String, base: String?) -> String {
