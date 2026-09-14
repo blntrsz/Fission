@@ -52,7 +52,16 @@ export class TerminalManager {
   }
 
   resize(tabID: string, cols: number, rows: number): void {
-    this.sessions.get(tabID)?.resize(Math.max(cols, 2), Math.max(rows, 1));
+    const nextCols = Math.floor(Number(cols));
+    const nextRows = Math.floor(Number(rows));
+    if (!Number.isFinite(nextCols) || !Number.isFinite(nextRows) || nextCols < 2 || nextRows < 1) {
+      return;
+    }
+    try {
+      this.sessions.get(tabID)?.resize(nextCols, nextRows);
+    } catch {
+      return;
+    }
   }
 
   terminate(tabIDs: string[]): void {

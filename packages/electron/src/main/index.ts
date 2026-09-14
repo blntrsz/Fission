@@ -23,6 +23,10 @@ import { nextNumber, title as tabTitle } from "@shared/terminalTabNaming";
 import { currentBranch } from "@shared/gitBranch";
 import { newThreadId, type TerminalTabRecord } from "@shared/types";
 
+process.on("uncaughtException", (error) => {
+  console.error(error);
+});
+
 installPiExtension();
 
 if (process.platform === "linux") {

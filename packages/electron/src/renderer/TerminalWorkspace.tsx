@@ -32,6 +32,7 @@ export function TerminalWorkspace(props: Props) {
     const [count] = useState("");
   const live = useRef(new Map<string, LiveTab>());
   const hosts = useRef(new Map<string, HTMLDivElement>());
+  const observers = useRef(new Map<string, ResizeObserver>());
   const threadID = props.thread.id;
 
   useEffect(() => {
@@ -122,14 +123,21 @@ export function TerminalWorkspace(props: Props) {
     if (!tab.terminal.element) {
       tab.terminal.open(host);
     }
-    requestAnimationFrame(() => {
-      tab.fit.fit();
+    const fitAndResize = () => {
+      if (host.clientWidth < 8 || host.clientHeight < 8) {
+        return;
+      }
+      try {
+        tab.fit.fit();
+      } catch {
+        return;
+      }
       const dims = tab.fit.proposeDimensions();
-      if (dims) {
+      if (dims && dims.cols >= 2 && dims.rows >= 1) {
         window.fission.terminal.resize(tabID, dims.cols, dims.rows);
       }
-      tab.terminal.focus();
-    });
+    };
+    requestAnimationFrame(fitAndResize);
   }
 
   async function addTab() {
@@ -241,9 +249,17 @@ export function TerminalWorkspace(props: Props) {
             <div
               className="xterm-host"
               ref={(node) => {
+                const existing = observers.current.get(tab.id);
+                existing?.disconnect();
+                observers.current.delete(tab.id);
                 if (node) {
                   hosts.current.set(tab.id, node);
                   attach(tab.id);
+                  const observer = new ResizeObserver(() => attach(tab.id));
+                  observer.observe(node);
+                  observers.current.set(tab.id, observer);
+                } else {
+                  hosts.current.delete(tab.id);
                 }
               }}
             />
