@@ -3,6 +3,15 @@ min_version = "2024.9.5"
 [tools]
 swiftlint = "latest"
 watchexec = "latest"
+bun = "latest"
+
+[tasks.electron]
+description = "Build and launch the Electron app"
+run = "bun run electron"
+
+[tasks."electron:smoke"]
+description = "Build the Electron app and quit after ready"
+run = "bun run electron:smoke"
 
 [tasks.lint]
 description = "Lint Swift sources"

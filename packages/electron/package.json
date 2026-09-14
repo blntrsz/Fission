@@ -1,0 +1,18 @@
+{
+	"name": "@fission/electron",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"main": "dist/main.js",
+	"installConfig": {
+		"hoistingLimits": "workspaces"
+	},
+	"scripts": {
+		"build": "bun build src/main.ts --outdir dist --target node --external electron && bun build src/preload.ts --outdir dist --target node --format cjs --external electron && bun build src/renderer.ts --outdir dist --target browser && cp src/index.html dist/index.html",
+		"start": "bun run build && electron dist/main.js",
+		"smoke": "bun run build && ELECTRON_SMOKE=1 electron dist/main.js"
+	},
+	"devDependencies": {
+		"electron": "^38.1.0"
+	}
+}
