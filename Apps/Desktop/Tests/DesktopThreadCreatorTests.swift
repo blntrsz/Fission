@@ -83,6 +83,103 @@ struct DesktopThreadCreatorTests {
         #expect(try gitOutput(["-C", expectedWorktree.path, "branch", "--show-current"]) == "fission-second")
     }
 
+    @Test func createsWorktreeUsingRequestedBranchName() async throws {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        let repository = temporaryDirectory.appending(path: "ExampleRepo", directoryHint: .isDirectory)
+        let worktreeRoot = temporaryDirectory.appending(path: "worktrees", directoryHint: .isDirectory)
+        let expectedWorktree = worktreeRoot
+            .appending(path: "ExampleRepo", directoryHint: .isDirectory)
+            .appending(path: "my-feature", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
+
+        try FileManager.default.createDirectory(at: repository, withIntermediateDirectories: true)
+        try runGit(["init", repository.path])
+        try runGit(["-C", repository.path, "config", "user.name", "Fission Tests"])
+        try runGit(["-C", repository.path, "config", "user.email", "tests@fission.local"])
+        try Data().write(to: repository.appending(path: "README.md"))
+        try runGit(["-C", repository.path, "add", "README.md"])
+        try runGit(["-C", repository.path, "commit", "-m", "Initial commit"])
+
+        let model = ThreadListModel(databasePath: ":memory:")
+        await model.load()
+        let threadID = await DesktopThreadCreator.create(
+            in: model,
+            workingDirectory: repository.path,
+            createWorktree: true,
+            worktreeRoot: worktreeRoot,
+            worktreeBranch: " my-feature ",
+            makeIdentifier: { "unused" }
+        )
+
+        let thread = try #require(model.threads.first { $0.id == threadID })
+        #expect(thread.title == "my-feature")
+        #expect(thread.workingDirectory == expectedWorktree.path)
+        #expect(try gitOutput(["-C", expectedWorktree.path, "branch", "--show-current"]) == "my-feature")
+    }
+
+    @Test func reportsWhenRequestedWorktreeBranchAlreadyExists() async throws {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        let repository = temporaryDirectory.appending(path: "ExampleRepo", directoryHint: .isDirectory)
+        let worktreeRoot = temporaryDirectory.appending(path: "worktrees", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
+
+        try FileManager.default.createDirectory(at: repository, withIntermediateDirectories: true)
+        try runGit(["init", repository.path])
+        try runGit(["-C", repository.path, "config", "user.name", "Fission Tests"])
+        try runGit(["-C", repository.path, "config", "user.email", "tests@fission.local"])
+        try Data().write(to: repository.appending(path: "README.md"))
+        try runGit(["-C", repository.path, "add", "README.md"])
+        try runGit(["-C", repository.path, "commit", "-m", "Initial commit"])
+        try runGit(["-C", repository.path, "branch", "taken-branch"])
+
+        let model = ThreadListModel(databasePath: ":memory:")
+        await model.load()
+        let threadID = await DesktopThreadCreator.create(
+            in: model,
+            workingDirectory: repository.path,
+            createWorktree: true,
+            worktreeRoot: worktreeRoot,
+            worktreeBranch: "taken-branch",
+            makeIdentifier: { "unused" }
+        )
+
+        #expect(threadID == nil)
+        #expect(model.threads.isEmpty)
+        #expect(model.errorMessage == "A branch named \"taken-branch\" already exists.")
+    }
+
+    @Test func reportsWhenRequestedWorktreeBranchIsInvalid() async throws {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appending(path: UUID().uuidString, directoryHint: .isDirectory)
+        let repository = temporaryDirectory.appending(path: "ExampleRepo", directoryHint: .isDirectory)
+        let worktreeRoot = temporaryDirectory.appending(path: "worktrees", directoryHint: .isDirectory)
+        defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
+
+        try FileManager.default.createDirectory(at: repository, withIntermediateDirectories: true)
+        try runGit(["init", repository.path])
+        try runGit(["-C", repository.path, "config", "user.name", "Fission Tests"])
+        try runGit(["-C", repository.path, "config", "user.email", "tests@fission.local"])
+        try Data().write(to: repository.appending(path: "README.md"))
+        try runGit(["-C", repository.path, "add", "README.md"])
+        try runGit(["-C", repository.path, "commit", "-m", "Initial commit"])
+
+        let model = ThreadListModel(databasePath: ":memory:")
+        await model.load()
+        let threadID = await DesktopThreadCreator.create(
+            in: model,
+            workingDirectory: repository.path,
+            createWorktree: true,
+            worktreeRoot: worktreeRoot,
+            worktreeBranch: "bad name",
+            makeIdentifier: { "unused" }
+        )
+
+        #expect(threadID == nil)
+        #expect(model.errorMessage == "Enter a valid Git branch name.")
+    }
+
     private func runGit(_ arguments: [String]) throws {
         _ = try gitOutput(arguments)
     }
@@ -121,4 +218,24 @@ private final class IdentifierSequence: @unchecked Sendable {
 
 private enum TestGitError: Error {
     case commandFailed(String)
+}
+
+struct GitWorktreeBranchTests {
+    @Test func trimsAndTreatsBlankNamesAsGenerated() {
+        #expect(GitWorktreeBranch.normalized(nil) == nil)
+        #expect(GitWorktreeBranch.normalized("  ") == nil)
+        #expect(GitWorktreeBranch.normalized(" feat/login ") == "feat/login")
+    }
+
+    @Test func acceptsTypicalBranchNamesAndRejectsInvalidOnes() {
+        #expect(GitWorktreeBranch.isValid("my-feature"))
+        #expect(GitWorktreeBranch.isValid("feat/login"))
+        #expect(!GitWorktreeBranch.isValid(""))
+        #expect(!GitWorktreeBranch.isValid("bad name"))
+        #expect(!GitWorktreeBranch.isValid("-leading-dash"))
+        #expect(!GitWorktreeBranch.isValid(".hidden"))
+        #expect(!GitWorktreeBranch.isValid("ends."))
+        #expect(!GitWorktreeBranch.isValid("foo..bar"))
+        #expect(!GitWorktreeBranch.isValid("@"))
+    }
 }

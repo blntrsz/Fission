@@ -378,14 +378,15 @@ struct ThreadListView: View {
         isCreatingThread = false
 
         switch request {
-        case let .local(directory, createWorktree):
+        case let .local(directory, createWorktree, branchName):
             RecentProjectPaths.record(directory)
             recentProjectPaths = RecentProjectPaths.load()
             Task {
                 if let threadID = await DesktopThreadCreator.create(
                     in: model,
                     workingDirectory: directory.path,
-                    createWorktree: createWorktree
+                    createWorktree: createWorktree,
+                    worktreeBranch: branchName
                 ) {
                     mostRecentlyCreatedThreadID = threadID
                     navigationModel.select(threadID: threadID)

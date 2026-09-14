@@ -4,7 +4,7 @@ import FissionCore
 import SwiftUI
 
 enum NewThreadRequest: Equatable {
-    case local(URL, createWorktree: Bool)
+    case local(URL, createWorktree: Bool, branchName: String?)
     case remote(RemoteMachine, projectPath: String)
 }
 
@@ -21,6 +21,7 @@ struct NewThreadSheet: View {
     @State private var selectedMachineID: UUID?
     @State private var remoteProjectPath = ""
     @State private var remoteListingsByDirectory: [String: RemoteDirectoryListing] = [:]
+    @State private var worktreeBranchName = ""
     @AppStorage("createThreadsInNewWorktree") private var createInNewWorktree = false
     @AppStorage("newThreadLocation") private var locationRaw = NewThreadLocation.local.rawValue
     @FocusState private var focusedField: Field?
@@ -342,7 +343,20 @@ struct NewThreadSheet: View {
             if location == .local {
                 Toggle("New worktree", isOn: $createInNewWorktree)
                     .toggleStyle(.switch)
+                    .accessibilityIdentifier("new-worktree-toggle")
                     .help("Create an isolated Git branch and use its checkout for this Thread.")
+
+                if createInNewWorktree {
+                    TextField("Branch name", text: $worktreeBranchName)
+                        .textFieldStyle(.roundedBorder)
+                        .font(.body)
+                        .foregroundStyle(.primary)
+                        .frame(width: 220)
+                        .focused($focusedField, equals: .branch)
+                        .accessibilityLabel("Worktree branch name")
+                        .accessibilityIdentifier("worktree-branch-field")
+                        .help("Git branch for the new worktree. Leave blank to generate one.")
+                }
             }
 
             Button("Create Thread") {
@@ -458,10 +472,18 @@ struct NewThreadSheet: View {
     private var canCreate: Bool {
         switch location {
         case .local:
-            !projects.isEmpty
+            !projects.isEmpty && worktreeBranchIsAllowed
         case .remote:
             selectedMachine != nil && selectedRemoteProjectPath != nil
         }
+    }
+
+    private var worktreeBranchIsAllowed: Bool {
+        guard createInNewWorktree else { return true }
+        guard let branch = GitWorktreeBranch.normalized(worktreeBranchName) else {
+            return true
+        }
+        return GitWorktreeBranch.isValid(branch)
     }
 
     private var selectedRemoteProjectPath: String? {
@@ -505,7 +527,13 @@ struct NewThreadSheet: View {
         switch location {
         case .local:
             guard projects.indices.contains(selectedIndex) else { return }
-            create(.local(projects[selectedIndex].url, createWorktree: createInNewWorktree))
+            create(.local(
+                projects[selectedIndex].url,
+                createWorktree: createInNewWorktree,
+                branchName: createInNewWorktree
+                    ? GitWorktreeBranch.normalized(worktreeBranchName)
+                    : nil
+            ))
         case .remote:
             guard let selectedMachine, let projectPath = selectedRemoteProjectPath else {
                 return
@@ -538,6 +566,7 @@ struct NewThreadSheet: View {
 private enum Field: Hashable {
     case project
     case remotePath
+    case branch
 }
 
 private enum NewThreadLocation: String {
