@@ -1,0 +1,9 @@
+{
+	"name": "fission",
+	"private": true,
+	"workspaces": ["packages/*"],
+	"scripts": {
+		"electron": "bun run --filter @fission/electron start",
+		"electron:smoke": "bun run --filter @fission/electron smoke"
+	}
+}

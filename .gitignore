@@ -30,6 +30,9 @@ playground.xcworkspace
 *.sqlite-shm
 *.sqlite-wal
 
+# JavaScript
+node_modules/
+
 # Dependency managers
 Carthage/Build/
 Pods/
