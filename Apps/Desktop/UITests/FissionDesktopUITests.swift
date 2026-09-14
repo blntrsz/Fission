@@ -89,6 +89,57 @@ final class FissionDesktopUITests: XCTestCase {
     }
 
     @MainActor
+    func testUserCanNameWorktreeBranchWhenCreatingThread() throws {
+        continueAfterFailure = false
+
+        let context = try launchIsolatedApp()
+        let app = context.app
+        defer {
+            app.terminate()
+            try? FileManager.default.removeItem(at: context.root)
+        }
+
+        try initializeGitRepository(at: context.projectDirectory)
+
+        XCTAssertTrue(app.staticTexts["Explore Fission"].waitForExistence(timeout: 10))
+        app.buttons["new-thread-button"].click()
+
+        let projectPath = app.textFields["project-path-field"]
+        XCTAssertTrue(projectPath.waitForExistence(timeout: 5))
+        projectPath.click()
+        projectPath.typeText(context.projectDirectory.path)
+
+        let worktreeToggle = app.descendants(matching: .any)["new-worktree-toggle"]
+        XCTAssertTrue(worktreeToggle.waitForExistence(timeout: 5))
+        worktreeToggle.click()
+
+        let branchField = app.textFields["worktree-branch-field"]
+        XCTAssertTrue(
+            branchField.waitForExistence(timeout: 5),
+            "Turning on New worktree should show a branch name field."
+        )
+        branchField.click()
+        branchField.typeText("custom-branch")
+
+        let createButton = app.buttons["create-thread-button"]
+        waitUntilEnabled(createButton)
+        createButton.click()
+
+        XCTAssertTrue(
+            projectPath.waitForNonExistence(timeout: 10),
+            "Creating a Thread should dismiss the New Thread sheet."
+        )
+        XCTAssertTrue(
+            app.staticTexts["custom-branch"].waitForExistence(timeout: 10),
+            "The created Thread should use the requested worktree branch name."
+        )
+        XCTAssertTrue(
+            app.staticTexts["SampleProject"].waitForExistence(timeout: 5),
+            "The created Thread should keep the selected project name."
+        )
+    }
+
+    @MainActor
     func testControlCClearsPendingTerminalInput() throws {
         continueAfterFailure = false
 
@@ -501,6 +552,32 @@ extension FissionDesktopUITests {
             Thread.sleep(forTimeInterval: 0.05)
         }
         return false
+    }
+
+    private func initializeGitRepository(at directory: URL) throws {
+        try runProcess("/usr/bin/git", arguments: ["init", "-b", "main", directory.path])
+        try runProcess("/usr/bin/git", arguments: ["-C", directory.path, "config", "user.name", "Fission Tests"])
+        try runProcess("/usr/bin/git", arguments: ["-C", directory.path, "config", "user.email", "tests@fission.local"])
+        try Data("# Sample\n".utf8).write(to: directory.appending(path: "README.md"))
+        try runProcess("/usr/bin/git", arguments: ["-C", directory.path, "add", "README.md"])
+        try runProcess("/usr/bin/git", arguments: ["-C", directory.path, "commit", "-m", "Initial commit"])
+    }
+
+    private func runProcess(_ executable: String, arguments: [String]) throws {
+        let process = Process()
+        let output = Pipe()
+        process.executableURL = URL(fileURLWithPath: executable)
+        process.arguments = arguments
+        process.standardOutput = output
+        process.standardError = output
+        try process.run()
+        let data = output.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        XCTAssertEqual(
+            process.terminationStatus,
+            0,
+            String(bytes: data, encoding: .utf8) ?? "Unknown process error"
+        )
     }
 
     private func seedThreads(
