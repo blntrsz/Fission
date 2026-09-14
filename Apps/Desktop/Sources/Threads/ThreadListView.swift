@@ -351,9 +351,12 @@ struct ThreadListView: View {
     }
 
     private func deleteThreads(at offsets: IndexSet, from threads: [AgentThread]) {
-        let ids = offsets.map { threads[$0].id }
-        for id in ids { workspaceStore.terminate(threadID: id) }
-        Task { await model.deleteThreads(ids: ids) }
+        let selected = offsets.map { threads[$0] }
+        for thread in selected { workspaceStore.terminate(threadID: thread.id) }
+        Task {
+            removeIsolates(for: selected)
+            await model.deleteThreads(ids: selected.map(\.id))
+        }
     }
 
     private func moveActiveThreads(from offsets: IndexSet, to destination: Int) {
@@ -364,7 +367,23 @@ struct ThreadListView: View {
 
     private func settle(_ thread: AgentThread) {
         workspaceStore.terminate(threadID: thread.id)
-        Task { await model.settle(threadID: thread.id) }
+        Task {
+            removeIsolates(for: [thread])
+            await model.settle(threadID: thread.id)
+        }
+    }
+
+    private func removeIsolates(for threads: [AgentThread]) {
+        for thread in threads where !thread.isRemote {
+            do {
+                try ProjectIsolator.removeIsolate(
+                    workingDirectory: thread.workingDirectory,
+                    isolateRoot: ProjectIsolator.defaultRoot
+                )
+            } catch {
+                model.errorMessage = error.localizedDescription
+            }
+        }
     }
 
     private func reopen(_ thread: AgentThread) {
@@ -378,15 +397,15 @@ struct ThreadListView: View {
         isCreatingThread = false
 
         switch request {
-        case let .local(directory, createWorktree, branchName):
+        case let .local(directory, createIsolate, branchName):
             RecentProjectPaths.record(directory)
             recentProjectPaths = RecentProjectPaths.load()
             Task {
                 if let threadID = await DesktopThreadCreator.create(
                     in: model,
                     workingDirectory: directory.path,
-                    createWorktree: createWorktree,
-                    worktreeBranch: branchName
+                    createIsolate: createIsolate,
+                    isolateBranch: branchName
                 ) {
                     mostRecentlyCreatedThreadID = threadID
                     navigationModel.select(threadID: threadID)

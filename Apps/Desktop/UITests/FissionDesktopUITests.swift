@@ -109,14 +109,14 @@ final class FissionDesktopUITests: XCTestCase {
         projectPath.click()
         projectPath.typeText(context.projectDirectory.path)
 
-        let worktreeToggle = app.descendants(matching: .any)["new-worktree-toggle"]
+        let worktreeToggle = app.descendants(matching: .any)["isolate-toggle"]
         XCTAssertTrue(worktreeToggle.waitForExistence(timeout: 5))
         worktreeToggle.click()
 
-        let branchField = app.textFields["worktree-branch-field"]
+        let branchField = app.textFields["isolate-branch-field"]
         XCTAssertTrue(
             branchField.waitForExistence(timeout: 5),
-            "Turning on New worktree should show a branch name field."
+            "Turning on New isolated workspace should show a branch name field."
         )
         branchField.click()
         branchField.typeText("custom-branch")
@@ -131,7 +131,7 @@ final class FissionDesktopUITests: XCTestCase {
         )
         XCTAssertTrue(
             app.staticTexts["custom-branch"].waitForExistence(timeout: 10),
-            "The created Thread should use the requested worktree branch name."
+            "The created Thread should use the requested isolate branch name."
         )
         XCTAssertTrue(
             app.staticTexts["SampleProject"].waitForExistence(timeout: 5),
@@ -432,7 +432,7 @@ extension FissionDesktopUITests {
         let app = XCUIApplication()
         app.launchArguments += [
             "-ApplePersistenceIgnoreState", "YES",
-            "-createThreadsInNewWorktree", "NO",
+            "-createThreadsInNewIsolate", "NO",
             "-FissionDatabasePath", databaseURL.path,
             "-FissionRemoteMachinesPath", remoteMachinesURL.path
         ]
