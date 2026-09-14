@@ -30,6 +30,10 @@ playground.xcworkspace
 *.sqlite-shm
 *.sqlite-wal
 
+# Node
+node_modules/
+packages/electron/out/
+
 # Dependency managers
 Carthage/Build/
 Pods/

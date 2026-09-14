@@ -13,76 +13,53 @@ description = "Automatically fix SwiftLint violations where possible"
 run = "swiftlint lint --fix"
 
 [tasks.desktop]
-description = "Run the macOS app and rebuild it when Swift sources change"
+description = "Run the Electron desktop app with Vite HMR"
+dir = "packages/electron"
 run = '''
 #!/usr/bin/env bash
 set -euo pipefail
-
-LOCK_DIR="${TMPDIR:-/tmp}/fission-desktop-watcher-${UID}.lock"
-if ! mkdir "$LOCK_DIR" 2>/dev/null; then
-  EXISTING_PID="$(cat "$LOCK_DIR/pid" 2>/dev/null || true)"
-  if [[ "$EXISTING_PID" =~ ^[0-9]+$ ]] && kill -0 "$EXISTING_PID" 2>/dev/null; then
-    echo "The Fission desktop watcher is already running (PID $EXISTING_PID)." >&2
-    exit 1
-  fi
-  rm -rf "$LOCK_DIR"
-  mkdir "$LOCK_DIR"
+if [[ ! -d node_modules ]]; then
+  npm install
 fi
-printf '%s\n' "$$" > "$LOCK_DIR/pid"
-trap 'rm -rf "$LOCK_DIR"' EXIT INT TERM
-
-watchexec \
-  --restart \
-  --project-origin . \
-  --watch Apps/Desktop/Sources \
-  --watch Apps/Desktop/FissionDesktop.xcodeproj/project.pbxproj \
-  --watch Packages/Core/Sources \
-  --watch Packages/Core/Package.swift \
-  -- mise run desktop:launch
+npm run dev
 '''
 
 [tasks."desktop:launch"]
-description = "Build and launch the macOS app in Debug mode once"
+description = "Build and launch the Electron desktop app once"
+dir = "packages/electron"
 run = '''
 #!/usr/bin/env bash
 set -euo pipefail
-
-DERIVED_DATA="Apps/Desktop/.derivedData"
-PRODUCT_NAME="FissionDev"
-APP_PATH="$DERIVED_DATA/Build/Products/Debug/$PRODUCT_NAME.app"
-
-xcodebuild \
-  -project Apps/Desktop/FissionDesktop.xcodeproj \
-  -scheme FissionDesktop \
-  -configuration Debug \
-  -destination 'platform=macOS' \
-  -derivedDataPath "$DERIVED_DATA" \
-  build
-
-# Ensure `open` starts the newly built dev binary rather than activating an older
-# dev build. The packaged Fission process is deliberately left running.
-# LaunchServices can return -600 if asked to reopen the app while its previous
-# process is still terminating.
-pkill -x "$PRODUCT_NAME" 2>/dev/null || true
-for _ in $(seq 1 100); do
-  pgrep -x "$PRODUCT_NAME" >/dev/null || break
-  sleep 0.05
-done
-if pgrep -x "$PRODUCT_NAME" >/dev/null; then
-  echo "$PRODUCT_NAME did not terminate within 5 seconds" >&2
-  exit 1
+if [[ ! -d node_modules ]]; then
+  npm install
 fi
-if ! open -n "$APP_PATH"; then
-  # LaunchServices can briefly retain the terminated app's launchd job even
-  # after the process disappears. Give it time to clear, then retry once.
-  sleep 0.25
-  open -n "$APP_PATH"
+npm run build
+npm run preview
+'''
+
+[tasks."desktop:test"]
+description = "Run Electron desktop unit tests"
+dir = "packages/electron"
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ ! -d node_modules ]]; then
+  npm install
 fi
+npm test
 '''
 
 [tasks."desktop:package"]
-description = "Build the macOS app in Release mode and package it as a DMG"
-run = "./scripts/package-desktop.sh"
+description = "Build the Electron desktop app"
+dir = "packages/electron"
+run = '''
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ ! -d node_modules ]]; then
+  npm install
+fi
+npm run build
+'''
 
 [tasks.mobile]
 description = "Run the iOS app and rebuild it when Swift sources change"
