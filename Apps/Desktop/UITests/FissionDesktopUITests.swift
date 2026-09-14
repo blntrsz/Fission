@@ -109,24 +109,42 @@ final class FissionDesktopUITests: XCTestCase {
         projectPath.click()
         projectPath.typeText(context.projectDirectory.path)
 
-        let worktreeToggle = app.descendants(matching: .any)["isolate-toggle"]
-        XCTAssertTrue(worktreeToggle.waitForExistence(timeout: 5))
-        worktreeToggle.click()
-
-        let branchField = app.textFields["isolate-branch-field"]
-        XCTAssertTrue(
-            branchField.waitForExistence(timeout: 5),
-            "Turning on New isolated workspace should show a branch name field."
+        let isolateToggle = app.descendants(matching: .any)["isolate-toggle"]
+        XCTAssertTrue(isolateToggle.waitForExistence(timeout: 5))
+        isolateToggle.click()
+        XCTAssertFalse(
+            app.textFields["isolate-branch-field"].exists,
+            "The branch name field should wait until Create Thread."
         )
-        branchField.click()
-        branchField.typeText("custom-branch")
 
         let createButton = app.buttons["create-thread-button"]
         waitUntilEnabled(createButton)
         createButton.click()
 
+        let branchField = app.textFields["isolate-branch-field"]
         XCTAssertTrue(
-            projectPath.waitForNonExistence(timeout: 10),
+            branchField.waitForExistence(timeout: 5),
+            "Create Thread should open a second step to name the isolate branch."
+        )
+        XCTAssertTrue(app.descendants(matching: .any)["new-thread-branch-step"].exists)
+        XCTAssertTrue(
+            projectPath.waitForNonExistence(timeout: 5),
+            "Project search should hide while naming the branch."
+        )
+
+        app.buttons["new-thread-back-button"].click()
+        XCTAssertTrue(projectPath.waitForExistence(timeout: 5))
+        waitUntilEnabled(createButton)
+        createButton.click()
+        XCTAssertTrue(branchField.waitForExistence(timeout: 5))
+
+        branchField.click()
+        branchField.typeText("custom-branch")
+        waitUntilEnabled(createButton)
+        createButton.click()
+
+        XCTAssertTrue(
+            branchField.waitForNonExistence(timeout: 10),
             "Creating a Thread should dismiss the New Thread sheet."
         )
         XCTAssertTrue(
@@ -165,12 +183,20 @@ final class FissionDesktopUITests: XCTestCase {
         waitUntilEnabled(createButton)
         createButton.click()
 
+        let branchField = app.textFields["isolate-branch-field"]
+        XCTAssertTrue(
+            branchField.waitForExistence(timeout: 5),
+            "Create Thread should open the isolate branch step before copying."
+        )
+        waitUntilEnabled(createButton)
+        createButton.click()
+
         XCTAssertTrue(
             app.descendants(matching: .any)["creating-thread-progress"].waitForExistence(timeout: 2),
             "Creating an isolated workspace should show a loading spinner."
         )
         XCTAssertTrue(
-            projectPath.waitForNonExistence(timeout: 15),
+            branchField.waitForNonExistence(timeout: 15),
             "Creating a Thread should dismiss the New Thread sheet after the isolate is ready."
         )
         XCTAssertTrue(

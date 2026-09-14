@@ -23,6 +23,7 @@ struct NewThreadSheet: View {
     @State private var remoteListingsByDirectory: [String: RemoteDirectoryListing] = [:]
     @State private var isolateBranchName = ""
     @State private var isCreating = false
+    @State private var step = Step.project
     @AppStorage("createThreadsInNewIsolate") private var createInNewIsolate = true
     @AppStorage("newThreadLocation") private var locationRaw = NewThreadLocation.local.rawValue
     @FocusState private var focusedField: Field?
@@ -46,13 +47,17 @@ struct NewThreadSheet: View {
     var body: some View {
         ZStack {
             VStack(spacing: 0) {
-                header
-                if location == .local {
-                    projectList
-                } else if machines.isEmpty {
-                    remoteEmptyList
+                if step == .isolateBranch {
+                    branchStep
                 } else {
-                    remoteProjectPicker
+                    header
+                    if location == .local {
+                        projectList
+                    } else if machines.isEmpty {
+                        remoteEmptyList
+                    } else {
+                        remoteProjectPicker
+                    }
                 }
                 footer
             }
@@ -79,8 +84,14 @@ struct NewThreadSheet: View {
             selectedIndex = projects.isEmpty ? -1 : 0
         }
         .onChange(of: location) { _, location in
+            step = .project
             focusedField = location == .local ? .project : .remotePath
             selectedIndex = projects.isEmpty ? -1 : 0
+        }
+        .onChange(of: createInNewIsolate) { _, isOn in
+            if !isOn {
+                step = .project
+            }
         }
         .onChange(of: selectedMachineID) { previousID, _ in
             let previousPath = machines.first { $0.id == previousID }?.projectPath ?? ""
@@ -94,20 +105,23 @@ struct NewThreadSheet: View {
             await loadRemoteListing()
         }
         .onKeyPress(.upArrow) {
+            guard step == .project else { return .ignored }
             moveSelection(by: -1)
             return .handled
         }
         .onKeyPress(.downArrow) {
+            guard step == .project else { return .ignored }
             moveSelection(by: 1)
             return .handled
         }
         .onKeyPress(keys: ["n", "p"]) { keyPress in
-            guard keyPress.modifiers == .control else { return .ignored }
+            guard step == .project, keyPress.modifiers == .control else { return .ignored }
             moveSelection(by: keyPress.key == "n" ? 1 : -1)
             return .handled
         }
         .onKeyPress(.tab) {
-            guard focusedField == (location == .local ? .project : .remotePath) else {
+            guard step == .project,
+                  focusedField == (location == .local ? .project : .remotePath) else {
                 return .ignored
             }
             completeSelectedProject()
@@ -115,7 +129,11 @@ struct NewThreadSheet: View {
         }
         .onExitCommand {
             guard !isCreating else { return }
-            cancel()
+            if step == .isolateBranch {
+                returnToProjectStep()
+            } else {
+                cancel()
+            }
         }
     }
 
@@ -138,17 +156,7 @@ struct NewThreadSheet: View {
 
                 Spacer()
 
-                Button(action: cancel) {
-                    Image(systemName: "xmark")
-                        .font(.headline)
-                        .padding(8)
-                        .contentShape(Circle())
-                        .background(.quaternary, in: Circle())
-                }
-                .buttonStyle(.plain)
-                .disabled(isCreating)
-                .accessibilityLabel("Close")
-                .help("Close")
+                closeButton
             }
 
             Picker("Location", selection: locationBinding) {
@@ -184,13 +192,79 @@ struct NewThreadSheet: View {
         .padding(24)
     }
 
+    private var branchStep: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("New Thread")
+                        .font(.title2.bold())
+                    Text("Name the Git branch for this isolated workspace.")
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                closeButton
+            }
+
+            if let project = selectedLocalProject {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Project")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(.secondary)
+                    Text(project.name)
+                        .font(.title3)
+                    Text(project.displayPath)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+            }
+
+            field(
+                title: "Branch name",
+                systemImage: "arrow.triangle.branch",
+                placeholder: "Leave blank to generate",
+                text: $isolateBranchName,
+                focus: .branch,
+                accessibilityIdentifier: "isolate-branch-field",
+                accessibilityLabel: "Isolate branch name"
+            )
+            .help("Git branch for the isolated workspace. Leave blank to generate one.")
+
+            Spacer()
+        }
+        .padding(24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .accessibilityIdentifier("new-thread-branch-step")
+        .task {
+            focusedField = .branch
+        }
+    }
+
+    private var closeButton: some View {
+        Button(action: cancel) {
+            Image(systemName: "xmark")
+                .font(.headline)
+                .padding(8)
+                .contentShape(Circle())
+                .background(.quaternary, in: Circle())
+        }
+        .buttonStyle(.plain)
+        .disabled(isCreating)
+        .accessibilityLabel("Close")
+        .help("Close")
+    }
+
     private func field(
         title: String,
         systemImage: String,
         placeholder: String,
         text: Binding<String>,
         focus: Field,
-        accessibilityIdentifier: String = "project-path-field"
+        accessibilityIdentifier: String = "project-path-field",
+        accessibilityLabel: String? = nil
     ) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
@@ -203,6 +277,7 @@ struct NewThreadSheet: View {
 
                 TextField(placeholder, text: text)
                     .accessibilityIdentifier(accessibilityIdentifier)
+                    .accessibilityLabel(accessibilityLabel ?? title)
                     .textFieldStyle(.plain)
                     .font(.title3)
                     .focused($focusedField, equals: focus)
@@ -346,30 +421,31 @@ struct NewThreadSheet: View {
 
     private var footer: some View {
         HStack(spacing: 18) {
-            Label("Navigate", systemImage: "arrow.up.arrow.down")
-            Label("Complete", systemImage: "arrow.right.to.line")
-            Label("Select", systemImage: "return")
-            Label("Close", systemImage: "escape")
+            if step == .isolateBranch {
+                Button("Back", systemImage: "chevron.left") {
+                    returnToProjectStep()
+                }
+                .labelStyle(.titleAndIcon)
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("new-thread-back-button")
+                .help("Return to project selection.")
+
+                Label("Create", systemImage: "return")
+                Label("Back", systemImage: "escape")
+            } else {
+                Label("Navigate", systemImage: "arrow.up.arrow.down")
+                Label("Complete", systemImage: "arrow.right.to.line")
+                Label("Select", systemImage: "return")
+                Label("Close", systemImage: "escape")
+            }
 
             Spacer()
 
-            if location == .local {
+            if location == .local && step == .project {
                 Toggle("New isolated workspace", isOn: $createInNewIsolate)
                     .toggleStyle(.switch)
                     .accessibilityIdentifier("isolate-toggle")
                     .help("Copy this project into an isolated folder for this Thread.")
-
-                if createInNewIsolate {
-                    TextField("Branch name", text: $isolateBranchName)
-                        .textFieldStyle(.roundedBorder)
-                        .font(.body)
-                        .foregroundStyle(.primary)
-                        .frame(width: 220)
-                        .focused($focusedField, equals: .branch)
-                        .accessibilityLabel("Isolate branch name")
-                        .accessibilityIdentifier("isolate-branch-field")
-                        .help("Git branch for the isolated workspace. Leave blank to generate one.")
-                }
             }
 
             Button("Create Thread") {
@@ -497,12 +573,19 @@ struct NewThreadSheet: View {
     }
 
     private var canCreate: Bool {
-        switch location {
-        case .local:
-            !projects.isEmpty && isolateBranchIsAllowed
-        case .remote:
+        switch (step, location) {
+        case (.isolateBranch, _):
+            isolateBranchIsAllowed
+        case (.project, .local):
+            !projects.isEmpty
+        case (.project, .remote):
             selectedMachine != nil && selectedRemoteProjectPath != nil
         }
+    }
+
+    private var selectedLocalProject: ProjectPath? {
+        guard location == .local, projects.indices.contains(selectedIndex) else { return nil }
+        return projects[selectedIndex]
     }
 
     private var isolateBranchIsAllowed: Bool {
@@ -555,9 +638,14 @@ struct NewThreadSheet: View {
         let request: NewThreadRequest
         switch location {
         case .local:
-            guard projects.indices.contains(selectedIndex) else { return }
+            guard let project = selectedLocalProject else { return }
+            if createInNewIsolate, step == .project {
+                step = .isolateBranch
+                focusedField = .branch
+                return
+            }
             request = .local(
-                projects[selectedIndex].url,
+                project.url,
                 createIsolate: createInNewIsolate,
                 branchName: createInNewIsolate
                     ? GitWorktreeBranch.normalized(isolateBranchName)
@@ -575,6 +663,11 @@ struct NewThreadSheet: View {
             await create(request)
             isCreating = false
         }
+    }
+
+    private func returnToProjectStep() {
+        step = .project
+        focusedField = .project
     }
 
     private func fillRemoteProjectPath(from machine: RemoteMachine?) {
@@ -602,6 +695,11 @@ private enum Field: Hashable {
     case project
     case remotePath
     case branch
+}
+
+private enum Step {
+    case project
+    case isolateBranch
 }
 
 private enum NewThreadLocation: String {
