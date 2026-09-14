@@ -140,6 +140,46 @@ final class FissionDesktopUITests: XCTestCase {
     }
 
     @MainActor
+    func testCreatingIsolatedThreadShowsLoadingSpinner() throws {
+        continueAfterFailure = false
+
+        let context = try launchIsolatedApp(
+            createIsolate: true,
+            isolateDelayMilliseconds: 1_500
+        )
+        let app = context.app
+        defer {
+            app.terminate()
+            try? FileManager.default.removeItem(at: context.root)
+        }
+
+        XCTAssertTrue(app.staticTexts["Explore Fission"].waitForExistence(timeout: 10))
+        app.buttons["new-thread-button"].click()
+
+        let projectPath = app.textFields["project-path-field"]
+        XCTAssertTrue(projectPath.waitForExistence(timeout: 5))
+        projectPath.click()
+        projectPath.typeText(context.projectDirectory.path)
+
+        let createButton = app.buttons["create-thread-button"]
+        waitUntilEnabled(createButton)
+        createButton.click()
+
+        XCTAssertTrue(
+            app.descendants(matching: .any)["creating-thread-progress"].waitForExistence(timeout: 2),
+            "Creating an isolated workspace should show a loading spinner."
+        )
+        XCTAssertTrue(
+            projectPath.waitForNonExistence(timeout: 15),
+            "Creating a Thread should dismiss the New Thread sheet after the isolate is ready."
+        )
+        XCTAssertTrue(
+            app.staticTexts["SampleProject"].waitForExistence(timeout: 10),
+            "The created Thread should select the requested project."
+        )
+    }
+
+    @MainActor
     func testControlCClearsPendingTerminalInput() throws {
         continueAfterFailure = false
 
@@ -402,7 +442,9 @@ extension FissionDesktopUITests {
     func launchIsolatedApp(
         withInterruptProbe: Bool = false,
         withSearchFixture: Bool = false,
-        withRemoteMachine: Bool = false
+        withRemoteMachine: Bool = false,
+        createIsolate: Bool = false,
+        isolateDelayMilliseconds: UInt64? = nil
     ) throws -> TestContext {
         let root = FileManager.default.temporaryDirectory
             .appending(path: "fission-ui-test-\(UUID().uuidString)", directoryHint: .isDirectory)
@@ -432,7 +474,7 @@ extension FissionDesktopUITests {
         let app = XCUIApplication()
         app.launchArguments += [
             "-ApplePersistenceIgnoreState", "YES",
-            "-createThreadsInNewIsolate", "NO",
+            "-createThreadsInNewIsolate", createIsolate ? "YES" : "NO",
             "-FissionDatabasePath", databaseURL.path,
             "-FissionRemoteMachinesPath", remoteMachinesURL.path
         ]
@@ -442,6 +484,9 @@ extension FissionDesktopUITests {
             .appending(path: ".pi/agent", directoryHint: .isDirectory)
             .path
         app.launchEnvironment["FISSION_EXECUTION_EPHEMERAL"] = "1"
+        if let isolateDelayMilliseconds {
+            app.launchEnvironment["FISSION_ISOLATE_DELAY_MS"] = String(isolateDelayMilliseconds)
+        }
         if withRemoteMachine {
             app.launchEnvironment["FISSION_REMOTE_DIRECTORY_LISTING"] = """
             {"/work":["fission","notes"],"/work/fission":["src","Packages"],"/":["work","tmp"],"~":["src","work"]}
