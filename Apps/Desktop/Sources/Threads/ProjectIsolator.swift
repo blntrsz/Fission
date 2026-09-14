@@ -36,6 +36,7 @@ enum ProjectIsolator {
             withIntermediateDirectories: true
         )
         do {
+            awaitTestDelayIfRequested()
             try assertCopyOnWriteAvailable(from: sourceRoot, to: resolved.isolateDirectory)
             try cloneDirectory(from: sourceRoot, to: resolved.destination)
             try createBranchIfNeeded(at: resolved.destination, named: resolved.branch)
@@ -187,56 +188,58 @@ enum ProjectIsolator {
               sourceDevice == destinationDevice else {
             throw IsolateError.copyOnWriteUnavailable
         }
-        try probeClonefile(from: source, to: destinationParent)
-    }
-
-    private static func probeClonefile(from source: URL, to destinationParent: URL) throws {
-        guard let probeSource = firstRegularFile(in: source) else { return }
-        let probeDestination = destinationParent.appending(path: ".fission-cow-probe")
-        try cloneFile(from: probeSource, to: probeDestination)
-        try FileManager.default.removeItem(at: probeDestination)
-    }
-
-    private static func firstRegularFile(in directory: URL) -> URL? {
-        guard let enumerator = FileManager.default.enumerator(
-            at: directory,
-            includingPropertiesForKeys: [.isRegularFileKey],
-            options: [.skipsHiddenFiles]
-        ) else {
-            return nil
-        }
-        while let file = enumerator.nextObject() as? URL {
-            let isRegular = (try? file.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) ?? false
-            if isRegular { return file }
-        }
-        return nil
     }
 
     private static func cloneDirectory(from source: URL, to destination: URL) throws {
-        let status = source.path.withCString { sourcePath in
-            destination.path.withCString { destinationPath in
-                copyfile(
-                    sourcePath,
-                    destinationPath,
-                    nil,
-                    copyfile_flags_t(COPYFILE_CLONE | COPYFILE_RECURSIVE)
-                )
-            }
+        let cloned = clonePath(source.path, to: destination.path, usingClonefile: true)
+        if cloned == 0 { return }
+
+        let cloneError = errno
+        if cloneError == EXDEV {
+            throw IsolateError.copyOnWriteUnavailable
         }
-        guard status == 0 else {
-            throw IsolateError.cloneFailed(errno)
+        guard cloneError == ENOTSUP else {
+            throw IsolateError.cloneFailed(cloneError)
+        }
+
+        let copied = clonePath(source.path, to: destination.path, usingClonefile: false)
+        guard copied == 0 else {
+            let copyError = errno
+            if copyError == EXDEV || copyError == ENOTSUP {
+                throw IsolateError.copyOnWriteUnavailable
+            }
+            throw IsolateError.cloneFailed(copyError)
         }
     }
 
-    private static func cloneFile(from source: URL, to destination: URL) throws {
-        let status = source.path.withCString { sourcePath in
-            destination.path.withCString { destinationPath in
-                clonefile(sourcePath, destinationPath, 0)
+    private static func clonePath(
+        _ sourcePath: String,
+        to destinationPath: String,
+        usingClonefile: Bool
+    ) -> Int32 {
+        sourcePath.withCString { source in
+            destinationPath.withCString { destination in
+                if usingClonefile {
+                    return clonefile(source, destination, 0)
+                }
+                return copyfile(
+                    source,
+                    destination,
+                    nil,
+                    copyfile_flags_t(COPYFILE_CLONE | COPYFILE_CLONE_FORCE | COPYFILE_RECURSIVE)
+                )
             }
         }
-        guard status == 0 else {
-            throw IsolateError.copyOnWriteUnavailable
+    }
+
+    private static func awaitTestDelayIfRequested() {
+        guard let raw = ProcessInfo.processInfo.environment["FISSION_ISOLATE_DELAY_MS"],
+              let milliseconds = UInt64(raw),
+              milliseconds > 0 else {
+            return
         }
+        let capped = min(milliseconds, 10_000)
+        Thread.sleep(forTimeInterval: Double(capped) / 1_000)
     }
 
     private static func isAPFS(_ url: URL) -> Bool {

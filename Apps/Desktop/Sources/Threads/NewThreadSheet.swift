@@ -13,7 +13,7 @@ struct NewThreadSheet: View {
     let recentRemotePathsByMachine: [UUID: [String]]
     let machines: [RemoteMachine]
     let remoteDirectoryCatalog: any RemoteDirectoryCatalog
-    let create: (NewThreadRequest) -> Void
+    let create: (NewThreadRequest) async -> Void
     let cancel: () -> Void
 
     @State private var query = ""
@@ -22,6 +22,7 @@ struct NewThreadSheet: View {
     @State private var remoteProjectPath = ""
     @State private var remoteListingsByDirectory: [String: RemoteDirectoryListing] = [:]
     @State private var isolateBranchName = ""
+    @State private var isCreating = false
     @AppStorage("createThreadsInNewIsolate") private var createInNewIsolate = true
     @AppStorage("newThreadLocation") private var locationRaw = NewThreadLocation.local.rawValue
     @FocusState private var focusedField: Field?
@@ -31,7 +32,7 @@ struct NewThreadSheet: View {
         recentRemotePathsByMachine: [UUID: [String]] = [:],
         machines: [RemoteMachine],
         remoteDirectoryCatalog: any RemoteDirectoryCatalog = RemoteDirectoryCatalogs.make(),
-        create: @escaping (NewThreadRequest) -> Void,
+        create: @escaping (NewThreadRequest) async -> Void,
         cancel: @escaping () -> Void
     ) {
         self.recentPaths = recentPaths
@@ -43,19 +44,27 @@ struct NewThreadSheet: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            if location == .local {
-                projectList
-            } else if machines.isEmpty {
-                remoteEmptyList
-            } else {
-                remoteProjectPicker
+        ZStack {
+            VStack(spacing: 0) {
+                header
+                if location == .local {
+                    projectList
+                } else if machines.isEmpty {
+                    remoteEmptyList
+                } else {
+                    remoteProjectPicker
+                }
+                footer
             }
-            footer
+            .disabled(isCreating)
+
+            if isCreating {
+                creatingOverlay
+            }
         }
         .frame(width: 720, height: 540)
         .background(.regularMaterial)
+        .interactiveDismissDisabled(isCreating)
         .task {
             if selectedMachineID == nil {
                 selectedMachineID = machines.first?.id
@@ -104,7 +113,10 @@ struct NewThreadSheet: View {
             completeSelectedProject()
             return .handled
         }
-        .onExitCommand(perform: cancel)
+        .onExitCommand {
+            guard !isCreating else { return }
+            cancel()
+        }
     }
 
     private var location: NewThreadLocation {
@@ -134,6 +146,7 @@ struct NewThreadSheet: View {
                         .background(.quaternary, in: Circle())
                 }
                 .buttonStyle(.plain)
+                .disabled(isCreating)
                 .accessibilityLabel("Close")
                 .help("Close")
             }
@@ -364,13 +377,27 @@ struct NewThreadSheet: View {
             }
             .accessibilityIdentifier("create-thread-button")
             .keyboardShortcut(.defaultAction)
-            .disabled(!canCreate)
+            .disabled(!canCreate || isCreating)
         }
         .font(.callout)
         .foregroundStyle(.secondary)
         .padding(.horizontal, 24)
         .frame(height: 64)
         .background(.bar)
+    }
+
+    private var creatingOverlay: some View {
+        ZStack {
+            Color.black.opacity(0.2)
+            ProgressView("Creating Thread…")
+                .controlSize(.large)
+                .padding(28)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityElement(children: .combine)
+        .accessibilityIdentifier("creating-thread-progress")
+        .accessibilityLabel("Creating Thread")
     }
 
     private var remoteEmptyList: some View {
@@ -524,21 +551,29 @@ struct NewThreadSheet: View {
     }
 
     private func createSelected() {
+        guard !isCreating else { return }
+        let request: NewThreadRequest
         switch location {
         case .local:
             guard projects.indices.contains(selectedIndex) else { return }
-            create(.local(
+            request = .local(
                 projects[selectedIndex].url,
                 createIsolate: createInNewIsolate,
                 branchName: createInNewIsolate
                     ? GitWorktreeBranch.normalized(isolateBranchName)
                     : nil
-            ))
+            )
         case .remote:
             guard let selectedMachine, let projectPath = selectedRemoteProjectPath else {
                 return
             }
-            create(.remote(selectedMachine, projectPath: projectPath))
+            request = .remote(selectedMachine, projectPath: projectPath)
+        }
+        Task {
+            isCreating = true
+            await Task.yield()
+            await create(request)
+            isCreating = false
         }
     }
 

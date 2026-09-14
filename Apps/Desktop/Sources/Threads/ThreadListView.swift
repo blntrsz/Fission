@@ -86,7 +86,9 @@ struct ThreadListView: View {
                 recentPaths: recentProjectPaths,
                 recentRemotePathsByMachine: recentRemotePathsByMachine,
                 machines: remoteMachineStore.machines,
-                create: createThread(_:),
+                create: { request in
+                    await createThread(request)
+                },
                 cancel: { isCreatingThread = false }
             )
         }
@@ -393,24 +395,22 @@ struct ThreadListView: View {
         }
     }
 
-    private func createThread(_ request: NewThreadRequest) {
-        isCreatingThread = false
-
+    private func createThread(_ request: NewThreadRequest) async {
         switch request {
         case let .local(directory, createIsolate, branchName):
             RecentProjectPaths.record(directory)
             recentProjectPaths = RecentProjectPaths.load()
-            Task {
-                if let threadID = await DesktopThreadCreator.create(
-                    in: model,
-                    workingDirectory: directory.path,
-                    createIsolate: createIsolate,
-                    isolateBranch: branchName
-                ) {
-                    mostRecentlyCreatedThreadID = threadID
-                    navigationModel.select(threadID: threadID)
-                }
+            guard let threadID = await DesktopThreadCreator.create(
+                in: model,
+                workingDirectory: directory.path,
+                createIsolate: createIsolate,
+                isolateBranch: branchName
+            ) else {
+                return
             }
+            mostRecentlyCreatedThreadID = threadID
+            navigationModel.select(threadID: threadID)
+            isCreatingThread = false
         case let .remote(machine, projectPath):
             let remembered = RemoteMachine(
                 id: machine.id,
@@ -421,16 +421,16 @@ struct ThreadListView: View {
                 projectPath: projectPath
             )
             remoteMachineStore.upsert(remembered)
-            Task {
-                if let threadID = await DesktopThreadCreator.createRemote(
-                    in: model,
-                    machine: remembered,
-                    projectPath: projectPath
-                ) {
-                    mostRecentlyCreatedThreadID = threadID
-                    navigationModel.select(threadID: threadID)
-                }
+            guard let threadID = await DesktopThreadCreator.createRemote(
+                in: model,
+                machine: remembered,
+                projectPath: projectPath
+            ) else {
+                return
             }
+            mostRecentlyCreatedThreadID = threadID
+            navigationModel.select(threadID: threadID)
+            isCreatingThread = false
         }
     }
 

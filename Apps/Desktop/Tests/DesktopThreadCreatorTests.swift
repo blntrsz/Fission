@@ -106,6 +106,30 @@ struct DesktopThreadCreatorTests {
         #expect(try String(contentsOf: expectedRoot.appending(path: "notes.txt"), encoding: .utf8) == "hello")
     }
 
+    @Test func isolatesAnEmptyFolderWithoutWalkingForAProbeFile() async throws {
+        let fixture = try IsolateFixture.makeEmptyFolder()
+        defer { fixture.tearDown() }
+
+        let model = ThreadListModel(databasePath: ":memory:")
+        await model.load()
+        let threadID = await DesktopThreadCreator.create(
+            in: model,
+            workingDirectory: fixture.repository.path,
+            createIsolate: true,
+            isolateRoot: fixture.isolateRoot,
+            makeIdentifier: { "empty1" }
+        )
+
+        let thread = try #require(model.threads.first { $0.id == threadID })
+        let expectedRoot = fixture.isolateRoot
+            .appending(path: "ExampleRepo")
+            .appending(path: "fission-empty1")
+            .appending(path: "ExampleRepo")
+        #expect(thread.title == "local")
+        #expect(thread.workingDirectory == expectedRoot.path)
+        #expect(FileManager.default.fileExists(atPath: expectedRoot.path))
+    }
+
     @Test func createsIsolateUsingRequestedBranchName() async throws {
         let fixture = try IsolateFixture.makeGitRepository(withNestedSelection: false)
         defer { fixture.tearDown() }
@@ -240,6 +264,12 @@ private struct IsolateFixture {
         let fixture = try makeDirectories(withNestedSelection: false)
         try FileManager.default.createDirectory(at: fixture.repository, withIntermediateDirectories: true)
         try Data("hello".utf8).write(to: fixture.repository.appending(path: "notes.txt"))
+        return fixture
+    }
+
+    static func makeEmptyFolder() throws -> IsolateFixture {
+        let fixture = try makeDirectories(withNestedSelection: false)
+        try FileManager.default.createDirectory(at: fixture.repository, withIntermediateDirectories: true)
         return fixture
     }
 
