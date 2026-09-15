@@ -414,6 +414,61 @@ final class FissionDesktopUITests: XCTestCase {
     }
 
     @MainActor
+    func testSettleThreadWithLargeIsolateUpdatesImmediately() throws {
+        continueAfterFailure = false
+
+        let context = try launchIsolatedApp(isolateRemoveDelayMilliseconds: 8_000)
+        let app = context.app
+        defer {
+            app.terminate()
+            try? FileManager.default.removeItem(at: context.root)
+        }
+
+        XCTAssertTrue(app.staticTexts["Explore Fission"].waitForExistence(timeout: 10))
+        app.terminate()
+
+        // Build a realistic isolate shape so the removal walks a real directory
+        // tree; the deterministic delay makes the freeze assertion independent
+        // of machine speed.
+        let isolateDirectory = context.root
+            .appending(path: ".fission/worktrees/Fission/fission-test/Fission")
+        try FileManager.default.createDirectory(
+            at: isolateDirectory,
+            withIntermediateDirectories: true
+        )
+        try seedIsolateFiles(count: 2_000, in: isolateDirectory)
+
+        try seedThreads(
+            count: 1,
+            databaseURL: context.databaseURL,
+            workingDirectory: isolateDirectory.path
+        )
+        app.launch()
+
+        let row = app.staticTexts["Seed 00"]
+        XCTAssertTrue(row.waitForExistence(timeout: 10))
+        row.hover()
+
+        let settleButton = app.buttons["Settle"]
+        XCTAssertTrue(settleButton.waitForExistence(timeout: 5))
+        settleButton.click()
+
+        let settledCount = app.buttons["settled-threads-accordion"]
+        XCTAssertTrue(
+            settledCount.waitForExistence(timeout: 3),
+            "Settling a Thread with a large isolate should update the list immediately, "
+                + "not wait for the isolate directory to be deleted."
+        )
+
+        // Removal must be asynchronous: with a synchronous removal the whole
+        // deletion finishes while the Settle click blocks the app.
+        XCTAssertTrue(
+            FileManager.default.fileExists(atPath: isolateDirectory.path),
+            "Settling should not synchronously delete the isolate directory."
+        )
+    }
+
+    @MainActor
     func testUserCanReorderThreadsInSidebar() throws {
         continueAfterFailure = false
 
@@ -470,7 +525,8 @@ extension FissionDesktopUITests {
         withSearchFixture: Bool = false,
         withRemoteMachine: Bool = false,
         createIsolate: Bool = false,
-        isolateDelayMilliseconds: UInt64? = nil
+        isolateDelayMilliseconds: UInt64? = nil,
+        isolateRemoveDelayMilliseconds: UInt64? = nil
     ) throws -> TestContext {
         let root = FileManager.default.temporaryDirectory
             .appending(path: "fission-ui-test-\(UUID().uuidString)", directoryHint: .isDirectory)
@@ -512,6 +568,11 @@ extension FissionDesktopUITests {
         app.launchEnvironment["FISSION_EXECUTION_EPHEMERAL"] = "1"
         if let isolateDelayMilliseconds {
             app.launchEnvironment["FISSION_ISOLATE_DELAY_MS"] = String(isolateDelayMilliseconds)
+        }
+        if let isolateRemoveDelayMilliseconds {
+            app.launchEnvironment["FISSION_ISOLATE_REMOVE_DELAY_MS"] = String(
+                isolateRemoveDelayMilliseconds
+            )
         }
         if withRemoteMachine {
             app.launchEnvironment["FISSION_REMOTE_DIRECTORY_LISTING"] = """
@@ -655,12 +716,16 @@ extension FissionDesktopUITests {
         count: Int,
         status: String = "active",
         databaseURL: URL,
-        replacingExisting: Bool = false
+        replacingExisting: Bool = false,
+        workingDirectory: String? = nil
     ) throws {
+        let workingDirectorySQL = workingDirectory.map {
+            "'\($0.replacingOccurrences(of: "'", with: "''"))'"
+        } ?? "NULL"
         let values = (0..<count).map { index in
             let id = String(format: "00000000-0000-0000-0000-%012d", index)
             let sortIndex = count - 1 - index
-            return "('\(id)', 'Seed \(String(format: "%02d", index))', '\(status)', NULL, \(index), \(index), \(sortIndex))"
+            return "('\(id)', 'Seed \(String(format: "%02d", index))', '\(status)', \(workingDirectorySQL), \(index), \(index), \(sortIndex))"
         }.joined(separator: ",")
 
         let process = Process()
@@ -681,5 +746,12 @@ extension FissionDesktopUITests {
             0,
             String(bytes: data, encoding: .utf8) ?? "Unknown sqlite3 error"
         )
+    }
+
+    private func seedIsolateFiles(count: Int, in directory: URL) throws {
+        for index in 0..<count {
+            let path = directory.appending(path: "artifact-\(index).dat")
+            try Data("\(index)".utf8).write(to: path)
+        }
     }
 }

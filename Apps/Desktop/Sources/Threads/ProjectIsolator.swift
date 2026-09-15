@@ -50,6 +50,7 @@ enum ProjectIsolator {
     }
 
     static func removeIsolate(workingDirectory: String?, isolateRoot: URL) throws {
+        awaitRemoveTestDelayIfRequested()
         guard let isolateDirectory = isolateDirectory(
             for: workingDirectory,
             isolateRoot: isolateRoot
@@ -233,7 +234,15 @@ enum ProjectIsolator {
     }
 
     private static func awaitTestDelayIfRequested() {
-        guard let raw = ProcessInfo.processInfo.environment["FISSION_ISOLATE_DELAY_MS"],
+        awaitTestDelayIfRequested(named: "FISSION_ISOLATE_DELAY_MS")
+    }
+
+    private static func awaitRemoveTestDelayIfRequested() {
+        awaitTestDelayIfRequested(named: "FISSION_ISOLATE_REMOVE_DELAY_MS")
+    }
+
+    private static func awaitTestDelayIfRequested(named environmentKey: String) {
+        guard let raw = ProcessInfo.processInfo.environment[environmentKey],
               let milliseconds = UInt64(raw),
               milliseconds > 0 else {
             return
