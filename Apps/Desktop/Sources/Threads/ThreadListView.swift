@@ -347,6 +347,7 @@ struct ThreadListView: View {
         }
         .buttonStyle(.plain)
         .listRowInsets(EdgeInsets(top: 6, leading: 8, bottom: 3, trailing: 8))
+        .accessibilityIdentifier("settled-threads-accordion")
         .accessibilityLabel(
             areSettledThreadsExpanded ? "Hide settled threads" : "Show settled threads"
         )
@@ -356,8 +357,8 @@ struct ThreadListView: View {
         let selected = offsets.map { threads[$0] }
         for thread in selected { workspaceStore.terminate(threadID: thread.id) }
         Task {
-            removeIsolates(for: selected)
             await model.deleteThreads(ids: selected.map(\.id))
+            await removeIsolatesInBackground(for: selected)
         }
     }
 
@@ -370,20 +371,29 @@ struct ThreadListView: View {
     private func settle(_ thread: AgentThread) {
         workspaceStore.terminate(threadID: thread.id)
         Task {
-            removeIsolates(for: [thread])
             await model.settle(threadID: thread.id)
+            await removeIsolatesInBackground(for: [thread])
         }
     }
 
-    private func removeIsolates(for threads: [AgentThread]) {
+    /// Removes isolate directories off the main actor: deleting a CoW clone
+    /// walks every file in the tree and can take seconds, so it must never run
+    /// on the main thread where it would freeze the UI.
+    private func removeIsolatesInBackground(for threads: [AgentThread]) async {
         for thread in threads where !thread.isRemote {
-            do {
-                try ProjectIsolator.removeIsolate(
-                    workingDirectory: thread.workingDirectory,
-                    isolateRoot: ProjectIsolator.defaultRoot
-                )
-            } catch {
-                model.errorMessage = error.localizedDescription
+            let failure = await Task.detached(priority: .utility) { () -> String? in
+                do {
+                    try ProjectIsolator.removeIsolate(
+                        workingDirectory: thread.workingDirectory,
+                        isolateRoot: ProjectIsolator.defaultRoot
+                    )
+                    return nil
+                } catch {
+                    return error.localizedDescription
+                }
+            }.value
+            if let failure {
+                model.errorMessage = failure
             }
         }
     }
