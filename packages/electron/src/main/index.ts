@@ -1,6 +1,7 @@
-import { app, BrowserWindow, Menu, Notification, ipcMain, shell, dialog } from "electron";
+import { app, BrowserWindow, Menu, Notification, ipcMain, shell, dialog, clipboard } from "electron";
 import { userInfo } from "node:os";
 import { readdirSync, statSync } from "node:fs";
+import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { AgentActivityService, installPiExtension } from "./activity";
 import {
@@ -22,6 +23,15 @@ import { resolvedListingTarget, normalizeRemoteQuery } from "@shared/projectPath
 import { nextNumber, title as tabTitle } from "@shared/terminalTabNaming";
 import { currentBranch } from "@shared/gitBranch";
 import { newThreadId, type TerminalTabRecord } from "@shared/types";
+import {
+  decision,
+  denialMessage,
+  displayString,
+  handlerDescription,
+  type TerminalURLSource
+} from "@shared/terminalURLPolicy";
+import { pasteText, storePastedImage } from "@shared/terminalInput";
+import { loadGhosttyAppearance } from "@shared/ghosttyConfig";
 
 process.on("uncaughtException", (error) => {
   console.error(error);
@@ -40,13 +50,27 @@ let recents: RecentProjectStore;
 let workspaces: WorkspacePersistence;
 let settings: SettingsStore;
 const terminals = new TerminalManager();
-const activity = new AgentActivityService((title, body) => {
-  if (Notification.isSupported()) {
-    new Notification({ title, body }).show();
+const activity = new AgentActivityService((title, body, threadID) => {
+  if (!Notification.isSupported()) {
+    return;
   }
+  const notification = new Notification({ title, body: body || undefined });
+  notification.on("click", () => {
+    mainWindow?.show();
+    mainWindow?.webContents.send("menu:open-thread-id", threadID);
+  });
+  notification.show();
 });
 
 let mainWindow: BrowserWindow | null = null;
+
+function showUpdateUnavailable(): void {
+  dialog.showMessageBox({
+    type: "info",
+    message: "Updates are unavailable in this build",
+    detail: "Development builds do not contact the production update feed."
+  });
+}
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -97,11 +121,7 @@ function buildMenu(): void {
             {
               label: "Check for Updates…",
               click: () => {
-                dialog.showMessageBox({
-                  type: "info",
-                  message: "Updates are unavailable in this build",
-                  detail: "Development builds do not contact the production update feed."
-                });
+                showUpdateUnavailable();
               }
             },
             { type: "separator" as const },
@@ -145,6 +165,17 @@ function buildMenu(): void {
           click: () => mainWindow?.webContents.send("menu:select-tab", number - 1)
         })),
         { type: "separator" },
+        ...(!isMac
+          ? [
+              {
+                label: "Check for Updates…",
+                click: () => {
+                  showUpdateUnavailable();
+                }
+              } satisfies Electron.MenuItemConstructorOptions,
+              { type: "separator" as const }
+            ]
+          : []),
         isMac ? { role: "close" as const } : { role: "quit" as const }
       ]
     },
@@ -171,6 +202,11 @@ function buildMenu(): void {
           label: "Hide Find Bar",
           accelerator: "CommandOrControl+Shift+F",
           click: () => mainWindow?.webContents.send("menu:search", "close")
+        },
+        {
+          label: "Use Selection for Find",
+          accelerator: "CommandOrControl+E",
+          click: () => mainWindow?.webContents.send("menu:search", "useSelection")
         }
       ]
     },
@@ -212,7 +248,8 @@ function registerIpc(): void {
       recentProjects: recents.load(),
       settings: settings.get(),
       homePath: homePath(),
-      username: userInfo().username
+      username: userInfo().username,
+      terminalAppearance: loadGhosttyAppearance()
     };
   });
 
@@ -307,8 +344,8 @@ function registerIpc(): void {
     return { number, title: tabTitle(number) };
   });
 
-  ipcMain.handle("terminal:create", (_event, spec) => {
-    terminals.create({
+  ipcMain.handle("terminal:create", async (_event, spec) => {
+    await terminals.create({
       ...spec,
       environment: activity.environment(spec.threadID, spec.tabID)
     });
@@ -334,6 +371,27 @@ function registerIpc(): void {
   });
 
   ipcMain.handle("shell:open-external", (_event, url: string) => shell.openExternal(url));
+  ipcMain.handle("terminal:open-url", async (_event, rawURL: string, source: TerminalURLSource) => {
+    await openTerminalURL(rawURL, source);
+  });
+  ipcMain.handle("terminal:stage-image", () => {
+    if (clipboard.readText().length > 0) {
+      return null;
+    }
+    const image = clipboard.readImage();
+    if (image.isEmpty()) {
+      return null;
+    }
+    const path = storePastedImage(image.toPNG(), "png");
+    return pasteText([path], null);
+  });
+  ipcMain.handle("terminal:escape-paths", (_event, paths: string[]) => pasteText(paths, null));
+  ipcMain.handle("notifications:request", async () => {
+    if (!Notification.isSupported()) {
+      return false;
+    }
+    return true;
+  });
   ipcMain.handle("fs:is-directory", (_event, path: string) => {
     try {
       return statSync(path).isDirectory();
@@ -355,6 +413,55 @@ function defaultTab(): TerminalTabRecord {
   return { id, number: 1, title: "Tab 1", isSelected: true };
 }
 
+async function openTerminalURL(rawURL: string, source: TerminalURLSource): Promise<void> {
+  const shown = displayString(rawURL);
+  const result = decision({ rawValue: rawURL, source });
+  switch (result.kind) {
+    case "open":
+      await openDecidedURL(result.url, result.method);
+      return;
+    case "confirm": {
+      const { response } = await dialog.showMessageBox({
+        type: "warning",
+        message: "Open Link from Terminal Output?",
+        detail: `This link will open in ${handlerDescription(null)}. Only continue if you recognize and trust the destination.\n\n${shown}`,
+        buttons: ["Cancel", "Open Link"],
+        defaultId: 0,
+        cancelId: 0
+      });
+      if (response === 1) {
+        await shell.openExternal(result.url);
+      }
+      return;
+    }
+    case "deny": {
+      const { response } = await dialog.showMessageBox({
+        type: "warning",
+        message: "Fission Blocked This Link",
+        detail: `${denialMessage[result.reason]}\n\n${shown}`,
+        buttons: ["OK", "Copy Link"],
+        defaultId: 0
+      });
+      if (response === 1) {
+        clipboard.writeText(shown);
+      }
+    }
+  }
+}
+
+async function openDecidedURL(url: string, method: "defaultApplication" | "textEditor"): Promise<void> {
+  if (url.startsWith("file:")) {
+    const path = fileURLToPath(url);
+    if (method === "textEditor" && process.platform === "darwin") {
+      spawn("open", ["-t", path], { detached: true, stdio: "ignore" }).unref();
+      return;
+    }
+    await shell.openPath(path);
+    return;
+  }
+  await shell.openExternal(url);
+}
+
 app.whenReady().then(async () => {
   remotes = new RemoteMachineStore(remoteMachinesPath());
   threads = await ThreadService.create(databasePath(), remotes);
@@ -362,6 +469,7 @@ app.whenReady().then(async () => {
   workspaces = new WorkspacePersistence(workspaceStatePath());
   settings = new SettingsStore(settingsPath());
   activity.notifyWhenFinished = settings.get().notifyWhenAgentFinishes;
+  activity.tabIDsForThread = (threadID) => workspaces.tabIDs(threadID);
   registerIpc();
   buildMenu();
   createWindow();
@@ -379,6 +487,6 @@ app.on("window-all-closed", () => {
 });
 
 app.on("before-quit", () => {
-  terminals.terminateAll();
+  terminals.detach();
   activity.close();
 });

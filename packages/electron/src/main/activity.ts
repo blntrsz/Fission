@@ -25,9 +25,12 @@ export class AgentActivityService {
   private selectedThreadID: string | null = null;
   private isAppActive = false;
   notifyWhenFinished = false;
+  tabIDsForThread: (threadID: string) => string[] = () => [];
   private window: BrowserWindow | null = null;
 
-  constructor(private readonly createNotification: (title: string, body: string) => void) {
+  constructor(
+    private readonly createNotification: (title: string, body: string, threadID: string) => void
+  ) {
     this.socket.on("message", (message) => this.accept(message));
     this.socket.bind(0, "127.0.0.1", () => {
       const address = this.socket.address();
@@ -60,14 +63,11 @@ export class AgentActivityService {
     }).slice(0, 10);
   }
 
-  snapshot(): Record<string, AgentActivityState[]> {
+  snapshot(tabIDsForThread?: (threadID: string) => string[]): Record<string, AgentActivityState[]> {
     const result: Record<string, AgentActivityState[]> = {};
     for (const threadID of this.threadsWithAgentRun) {
-      const activities = this.activities.get(threadID);
-      if (!activities) {
-        continue;
-      }
-      result[threadID] = [...activities.values()].map((activity) => activity.state);
+      const tabIDs = tabIDsForThread?.(threadID) ?? [...(this.activities.get(threadID)?.keys() ?? [])];
+      result[threadID] = this.states(threadID, tabIDs);
     }
     return result;
   }
@@ -160,8 +160,9 @@ export class AgentActivityService {
       ) {
         const metadata = this.threadMetadata.get(report.threadId);
         this.createNotification(
-          "Agent finished",
-          metadata?.title ?? "Thread"
+          `"${metadata?.title ?? "Thread"}" finished`,
+          metadata?.projectName ?? projectNameFromPath(metadata?.workingDirectory),
+          report.threadId
         );
       }
       if (this.selectedThreadID === report.threadId) {
@@ -186,7 +187,7 @@ export class AgentActivityService {
   }
 
   private publish(): void {
-    this.window?.webContents.send("activity:changed", this.snapshot());
+    this.window?.webContents.send("activity:changed", this.snapshot(this.tabIDsForThread));
   }
 }
 
@@ -214,4 +215,13 @@ export function installPiExtension(): void {
 
 function sessionKey(threadID: string, tabID: string): SessionID {
   return `${threadID}:${tabID}`;
+}
+
+function projectNameFromPath(workingDirectory: string | null | undefined): string {
+  if (!workingDirectory) {
+    return "";
+  }
+  const trimmed = workingDirectory.replace(/\/+$/, "");
+  const slash = trimmed.lastIndexOf("/");
+  return slash === -1 ? trimmed : trimmed.slice(slash + 1);
 }

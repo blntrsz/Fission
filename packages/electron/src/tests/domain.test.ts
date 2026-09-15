@@ -22,9 +22,15 @@ import {
   synchronizeNavigation
 } from "@shared/navigation";
 import { createThreadInput, ThreadRepository } from "@shared/threadRepository";
-import { mkdtempSync } from "node:fs";
+import { decision } from "@shared/terminalURLPolicy";
+import { displayString as displayURL, handlerDescription, posixNormalize } from "@shared/terminalURLDisplay";
+import { pasteText, storePastedImage } from "@shared/terminalInput";
+import { appendReplay, replayByteLimit } from "@shared/executionProtocol";
+import { appearanceFromGhosttyValues, parseGhosttyConfig } from "@shared/ghosttyConfig";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 
 describe("ProjectPathQuery", () => {
   it("detects path-shaped queries", () => {
@@ -262,5 +268,160 @@ describe("ThreadRepository", () => {
     repository.delete(older.id);
     expect(repository.thread(older.id)).toBeNull();
     repository.close();
+  });
+});
+
+describe("terminal URL policy", () => {
+  it("allows safe web and mail links", () => {
+    expect(decision({ rawValue: "https://example.com/issues/3", source: "osc8" })).toEqual({
+      kind: "open",
+      url: "https://example.com/issues/3",
+      method: "defaultApplication"
+    });
+    expect(decision({ rawValue: "mailto:hello@example.com", source: "osc8" }).kind).toBe("open");
+  });
+
+  it("denies malformed targets", () => {
+    for (const rawURL of [
+      "https:relative",
+      "https:///missing-host",
+      "mailto:",
+      "mailto:not-an-address",
+      "https://example.com/%ZZ",
+      "relative/path"
+    ]) {
+      expect(decision({ rawValue: rawURL, source: "osc8" })).toEqual({
+        kind: "deny",
+        reason: "malformedURL"
+      });
+    }
+  });
+
+  it("denies invisible and control characters", () => {
+    for (const rawURL of [
+      "https://example.com/real\nhttps://evil.example",
+      "https://example.com/\u{202E}evil",
+      "https://example.com/zero\u{200B}width",
+      "https://example.com/function\u{2062}application",
+      "https://example.com/soft\u{00AD}hyphen",
+      "https://example.com/line\u{2028}break"
+    ]) {
+      expect(decision({ rawValue: rawURL, source: "osc8" })).toEqual({
+        kind: "deny",
+        reason: "unsafeCharacters"
+      });
+    }
+  });
+
+  it("opens local text files in an editor", () => {
+    const directory = mkdtempSync(join(tmpdir(), "fission-url-"));
+    const file = join(directory, "notes.txt");
+    writeFileSync(file, "hello");
+    const disguised = pathToFileURL(join(directory, "folder/../notes.txt")).href;
+    expect(decision({ rawValue: disguised, source: { detected: "text" } })).toEqual({
+      kind: "open",
+      url: pathToFileURL(realpathSync(file)).href,
+      method: "textEditor"
+    });
+    expect(decision({ rawValue: realpathSync(file), source: { detected: "text" } }).kind).toBe("open");
+  });
+
+  it("denies remote, missing, special, and unsafe files", () => {
+    expect(decision({ rawValue: "file://server.example/tmp/notes.txt", source: "osc8" })).toEqual({
+      kind: "deny",
+      reason: "remoteFile"
+    });
+    expect(decision({ rawValue: "file:///definitely/missing/fission-file", source: "osc8" })).toEqual({
+      kind: "deny",
+      reason: "inaccessibleFile"
+    });
+    expect(decision({ rawValue: "file:///dev/null", source: "osc8" })).toEqual({
+      kind: "deny",
+      reason: "inaccessibleFile"
+    });
+    const directory = mkdtempSync(join(tmpdir(), "fission-url-"));
+    for (const name of ["payload.command", "payload.sh", "installer.pkg", "profile.mobileconfig"]) {
+      const file = join(directory, name);
+      writeFileSync(file, "content");
+      expect(decision({ rawValue: pathToFileURL(file).href, source: "osc8" })).toEqual({
+        kind: "deny",
+        reason: "unsafeFile"
+      });
+    }
+    mkdirSync(join(directory, "Payload.app"));
+    expect(
+      decision({ rawValue: pathToFileURL(join(directory, "Payload.app")).href, source: "osc8" })
+    ).toEqual({ kind: "deny", reason: "unsafeFile" });
+
+    const executable = join(directory, "payload");
+    writeFileSync(executable, "#!/bin/sh\n");
+    chmodSync(executable, 0o755);
+    expect(decision({ rawValue: pathToFileURL(executable).href, source: "osc8" })).toEqual({
+      kind: "deny",
+      reason: "unsafeFile"
+    });
+  });
+
+  it("confirms custom schemes", () => {
+    expect(decision({ rawValue: "my-tool://perform/action", source: "osc8" })).toEqual({
+      kind: "confirm",
+      url: "my-tool://perform/action"
+    });
+  });
+
+  it("canonicalizes hover destinations", () => {
+    expect(handlerDescription("Example Browser")).toBe("“Example Browser”");
+    expect(handlerDescription(null)).toBe("the default application");
+    expect(displayURL("https://example.com/a\nline")).toBe("https://example.com/a%0Aline");
+    const directory = mkdtempSync(join(tmpdir(), "fission-url-"));
+    const file = join(directory, "notes.txt");
+    writeFileSync(file, "hello");
+    expect(displayURL(pathToFileURL(`${directory}/folder/../notes.txt`).href)).toBe(
+      posixNormalize(`${directory}/folder/../notes.txt`)
+    );
+  });
+});
+
+describe("terminal paste", () => {
+  it("prefers URLs and shell-escapes paths", () => {
+    expect(pasteText(["/tmp/a file.txt", "https://example.com/a?q=1"], "ignored")).toBe(
+      "/tmp/a\\ file.txt https://example.com/a?q=1"
+    );
+    expect(pasteText(["/tmp/it's here.png"], null)).toBe("/tmp/it\\'s\\ here.png");
+    expect(pasteText([], "hello")).toBe("hello");
+    expect(pasteText([], "")).toBeNull();
+  });
+
+  it("stages clipboard image data", () => {
+    const data = Uint8Array.from([0x89, 0x50, 0x4e, 0x47]);
+    const path = storePastedImage(data, "png");
+    expect(path.endsWith(".png")).toBe(true);
+    expect(readFileSync(path)).toEqual(Buffer.from(data));
+  });
+});
+
+describe("execution replay and ghostty config", () => {
+  it("caps replay at 4 MiB", () => {
+    const first = appendReplay(Buffer.alloc(0), 0, Buffer.alloc(replayByteLimit, 1));
+    const next = appendReplay(first.replay, first.startOffset, Buffer.from("abc"));
+    expect(next.replay.length).toBe(replayByteLimit);
+    expect(next.startOffset).toBe(3);
+    expect(next.replay.subarray(-3).toString()).toBe("abc");
+  });
+
+  it("parses ghostty colors and fonts", () => {
+    const values = parseGhosttyConfig(`
+background = #111111
+foreground = #eeeeee
+font-family = JetBrains Mono
+font-size = 14
+palette = 0=#000000
+palette = 1=#ff0000
+`);
+    const appearance = appearanceFromGhosttyValues(values);
+    expect(appearance.fontSize).toBe(14);
+    expect(appearance.theme.background).toBe("#111111");
+    expect(appearance.theme.black).toBe("#000000");
+    expect(appearance.fontFamily).toContain("JetBrains Mono");
   });
 });

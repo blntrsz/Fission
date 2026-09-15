@@ -54,17 +54,31 @@ export function SettingsModal(props: Props) {
               <p>No remote machines yet. Add a host to open Threads over mosh.</p>
             )}
             {props.machines.map((machine) => (
-              <button
-                type="button"
-                key={machine.id}
-                className="machine-row"
-                data-testid={`settings-remote-machine-${machine.id}`}
-                onClick={() => setDraft(machine)}
-              >
-                <strong>{machineDisplayName(machine)}</strong>
-                <div>{machineTarget(machine)}</div>
-                {machine.projectPath && <div>{machine.projectPath}</div>}
-              </button>
+              <div key={machine.id} className="machine-row-wrap">
+                <button
+                  type="button"
+                  className="machine-row"
+                  data-testid={`settings-remote-machine-${machine.id}`}
+                  onClick={() => setDraft(machine)}
+                >
+                  <strong>{machineDisplayName(machine)}</strong>
+                  <div>{machineTarget(machine)}</div>
+                  {machine.projectPath && <div>{machine.projectPath}</div>}
+                </button>
+                <button
+                  type="button"
+                  className="icon-button"
+                  aria-label="Delete Machine"
+                  data-testid={`delete-remote-machine-${machine.id}`}
+                  onClick={() =>
+                    void window.fission.machines.remove(machine.id).then((machines) => {
+                      props.onMachinesChange(machines);
+                    })
+                  }
+                >
+                  ×
+                </button>
+              </div>
             ))}
             <button
               type="button"
@@ -97,6 +111,10 @@ export function SettingsModal(props: Props) {
                 setDraft(null);
               }
             }}
+            onDeleted={(machines) => {
+              props.onMachinesChange(machines);
+              setDraft(null);
+            }}
           />
         )}
       </div>
@@ -108,6 +126,7 @@ function MachineEditor(props: {
   machine: RemoteMachine;
   onSave: (machine: RemoteMachine) => Promise<void>;
   onCancel: () => void;
+  onDeleted: (machines: RemoteMachine[]) => void;
 }) {
   const [name, setName] = useState(props.machine.name);
   const [username, setUsername] = useState(props.machine.username);
@@ -141,6 +160,16 @@ function MachineEditor(props: {
           onClick={() => void props.onSave(draft)}
         >
           Save
+        </button>
+        <button
+          type="button"
+          data-testid="delete-remote-machine-button"
+          onClick={async () => {
+            const machines = await window.fission.machines.remove(props.machine.id);
+            props.onDeleted(machines);
+          }}
+        >
+          Delete
         </button>
       </div>
     </div>

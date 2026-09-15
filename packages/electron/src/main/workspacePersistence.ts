@@ -11,6 +11,10 @@ export class WorkspacePersistence {
     return this.read()[threadID] ?? [];
   }
 
+  tabIDs(threadID: string): string[] {
+    return this.load(threadID).map((record) => record.id);
+  }
+
   save(threadID: string, tabs: TerminalTabRecord[]): void {
     const data = this.read();
     data[threadID] = tabs;

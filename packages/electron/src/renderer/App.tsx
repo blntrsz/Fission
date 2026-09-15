@@ -9,6 +9,7 @@ import {
 } from "@shared/types";
 import * as navigation from "@shared/navigation";
 import type { AppSettings } from "@shared/settings";
+import type { TerminalAppearance } from "@shared/ghosttyConfig";
 import { Sidebar } from "./Sidebar";
 import { NewThreadModal } from "./NewThreadModal";
 import { ActiveThreadPicker } from "./ActiveThreadPicker";
@@ -22,6 +23,7 @@ type Bootstrap = {
   settings: AppSettings;
   homePath: string;
   username: string;
+  terminalAppearance: TerminalAppearance;
 };
 
 export function App() {
@@ -32,6 +34,7 @@ export function App() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [homePath, setHomePath] = useState("");
   const [username, setUsername] = useState("");
+  const [appearance, setAppearance] = useState<TerminalAppearance | null>(null);
   const [nav, setNav] = useState(navigation.createNavigation());
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -67,6 +70,7 @@ export function App() {
       setSettings(payload.settings);
       setHomePath(payload.homePath);
       setUsername(payload.username);
+      setAppearance(payload.terminalAppearance);
       applyThreads(payload.threads);
       setReady(true);
     });
@@ -92,6 +96,11 @@ export function App() {
         case "menu:open-thread":
           if (activeThreads.length > 0) {
             setSwitching(true);
+          }
+          break;
+        case "menu:open-thread-id":
+          if (typeof payload === "string") {
+            setNav((current) => navigation.selectThread(current, payload));
           }
           break;
         case "menu:rename-thread":
@@ -120,6 +129,13 @@ export function App() {
       }
     });
   }, [activeThreads.length]);
+
+  async function updateSettings(patch: Partial<AppSettings>) {
+    if (patch.notifyWhenAgentFinishes) {
+      await window.fission.notifications.request();
+    }
+    setSettings(await window.fission.settings.update(patch));
+  }
 
   async function createThread(request: NewThreadRequest) {
     try {
@@ -178,6 +194,7 @@ export function App() {
           <TerminalWorkspace
             thread={selected}
             command={tabCommand}
+            appearance={appearance}
             onCommandHandled={() => setTabCommand(null)}
           />
         ) : (
@@ -197,7 +214,7 @@ export function App() {
           threads={threads}
           settings={settings}
           homePath={homePath}
-          onSettingsChange={async (patch) => setSettings(await window.fission.settings.update(patch))}
+          onSettingsChange={updateSettings}
           onCreate={createThread}
           onOpenSettings={() => {
             setCreating(false);
@@ -222,7 +239,7 @@ export function App() {
           settings={settings}
           machines={machines}
           username={username}
-          onSettingsChange={async (patch) => setSettings(await window.fission.settings.update(patch))}
+          onSettingsChange={updateSettings}
           onMachinesChange={setMachines}
           onClose={() => setSettingsOpen(false)}
         />

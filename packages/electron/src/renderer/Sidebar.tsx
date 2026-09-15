@@ -21,6 +21,8 @@ type Props = {
   onReorder: (ids: string[]) => Promise<void>;
 };
 
+type MenuState = { x: number; y: number; thread: AgentThread } | null;
+
 export function Sidebar(props: Props) {
   const [editingID, setEditingID] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
@@ -28,6 +30,8 @@ export function Sidebar(props: Props) {
   const [settledOpen, setSettledOpen] = useState(true);
   const [settledLimit, setSettledLimit] = useState(20);
   const [dragID, setDragID] = useState<string | null>(null);
+  const [menu, setMenu] = useState<MenuState>(null);
+  const [confirmDelete, setConfirmDelete] = useState<AgentThread | null>(null);
 
   const active = useMemo(
     () => props.threads.filter((thread) => !isSettled(thread)),
@@ -74,6 +78,7 @@ export function Sidebar(props: Props) {
   function beginRename(thread: AgentThread) {
     setEditingID(thread.id);
     setDraft(thread.title);
+    setMenu(null);
   }
 
   async function commitRename() {
@@ -116,6 +121,10 @@ export function Sidebar(props: Props) {
             onCancelRename={() => setEditingID(null)}
             onSettle={() => void props.onSettle(thread.id)}
             onReopen={() => undefined}
+            onContextMenu={(event) => {
+              event.preventDefault();
+              setMenu({ x: event.clientX, y: event.clientY, thread });
+            }}
             draggable
             dragging={dragID === thread.id}
             onDragStart={() => setDragID(thread.id)}
@@ -162,6 +171,10 @@ export function Sidebar(props: Props) {
                   onCancelRename={() => setEditingID(null)}
                   onSettle={() => undefined}
                   onReopen={() => void props.onReopen(thread.id)}
+                  onContextMenu={(event) => {
+                    event.preventDefault();
+                    setMenu({ x: event.clientX, y: event.clientY, thread });
+                  }}
                 />
               ))}
             {settledOpen && settled.length > visibleSettled.length && (
@@ -177,6 +190,86 @@ export function Sidebar(props: Props) {
           </>
         )}
       </div>
+      {menu && (
+        <div className="menu-backdrop" onClick={() => setMenu(null)}>
+          <div
+            className="context-menu"
+            style={{ left: menu.x, top: menu.y }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => {
+                beginRename(menu.thread);
+              }}
+            >
+              Rename
+            </button>
+            <hr />
+            {isSettled(menu.thread) ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setMenu(null);
+                  void props.onReopen(menu.thread.id);
+                }}
+              >
+                Reopen
+              </button>
+            ) : (
+              <>
+                <button type="button" disabled title="Snooze — coming soon">
+                  Snooze
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMenu(null);
+                    void props.onSettle(menu.thread.id);
+                  }}
+                >
+                  Settle
+                </button>
+              </>
+            )}
+            <hr />
+            <button
+              type="button"
+              className="danger"
+              onClick={() => {
+                setConfirmDelete(menu.thread);
+                setMenu(null);
+              }}
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+      )}
+      {confirmDelete && (
+        <div className="alert">
+          <div className="alert-card">
+            <h3>Delete Thread?</h3>
+            <p>This removes “{confirmDelete.title}” and its terminals.</p>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button type="button" onClick={() => setConfirmDelete(null)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="primary"
+                onClick={() => {
+                  const id = confirmDelete.id;
+                  setConfirmDelete(null);
+                  void props.onDelete([id]);
+                }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </aside>
   );
 }
@@ -195,6 +288,7 @@ function ThreadRow(props: {
   onCancelRename: () => void;
   onSettle: () => void;
   onReopen: () => void;
+  onContextMenu: (event: React.MouseEvent) => void;
   draggable?: boolean;
   dragging?: boolean;
   onDragStart?: () => void;
@@ -207,10 +301,7 @@ function ThreadRow(props: {
       className={`thread-row${props.selected ? " selected" : ""}${isSettled(thread) ? " settled" : ""}${props.dragging ? " drag-over" : ""}`}
       draggable={props.draggable}
       onClick={props.onSelect}
-      onContextMenu={(event) => {
-        event.preventDefault();
-        props.onBeginRename();
-      }}
+      onContextMenu={props.onContextMenu}
       onDragStart={props.onDragStart}
       onDragOver={(event) => event.preventDefault()}
       onDrop={props.onDrop}
@@ -226,9 +317,20 @@ function ThreadRow(props: {
               ↩
             </button>
           ) : (
-            <button type="button" className="icon-button" aria-label="Settle Thread" onClick={props.onSettle}>
-              ✓
-            </button>
+            <>
+              <button
+                type="button"
+                className="icon-button"
+                aria-label="Snooze Thread"
+                title="Snooze — coming soon"
+                disabled
+              >
+                ⏱
+              </button>
+              <button type="button" className="icon-button" aria-label="Settle Thread" onClick={props.onSettle}>
+                ✓
+              </button>
+            </>
           )}
         </div>
       </div>

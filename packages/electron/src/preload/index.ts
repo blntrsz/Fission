@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 import type { NewThreadRequest, ProjectPath, RemoteMachine, TerminalTabRecord } from "@shared/types";
 import type { AppSettings } from "@shared/settings";
+import type { TerminalURLSource } from "@shared/terminalURLPolicy";
 
 const api = {
   bootstrap: () => ipcRenderer.invoke("bootstrap"),
@@ -47,6 +48,11 @@ const api = {
       ipcRenderer.send("terminal:resize", tabID, cols, rows),
     terminate: (tabIDs: string[], threadID: string) =>
       ipcRenderer.invoke("terminal:terminate", tabIDs, threadID),
+    openURL: (url: string, source: TerminalURLSource) =>
+      ipcRenderer.invoke("terminal:open-url", url, source),
+    stageImage: () => ipcRenderer.invoke("terminal:stage-image") as Promise<string | null>,
+    escapePaths: (paths: string[]) =>
+      ipcRenderer.invoke("terminal:escape-paths", paths) as Promise<string | null>,
     onData: (handler: (tabID: string, data: string) => void) => {
       const listener = (_event: unknown, tabID: string, data: string) => handler(tabID, data);
       ipcRenderer.on("terminal:data", listener);
@@ -73,6 +79,7 @@ const api = {
       const channels = [
         "menu:new-thread",
         "menu:open-thread",
+        "menu:open-thread-id",
         "menu:rename-thread",
         "menu:new-tab",
         "menu:select-tab",
@@ -93,6 +100,9 @@ const api = {
       };
     }
   },
+  notifications: {
+    request: () => ipcRenderer.invoke("notifications:request") as Promise<boolean>
+  },
   shell: {
     openExternal: (url: string) => ipcRenderer.invoke("shell:open-external", url)
   }
@@ -101,9 +111,3 @@ const api = {
 contextBridge.exposeInMainWorld("fission", api);
 
 export type FissionAPI = typeof api;
-
-declare global {
-  interface Window {
-    fission: FissionAPI;
-  }
-}

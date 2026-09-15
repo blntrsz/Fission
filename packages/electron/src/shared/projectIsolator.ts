@@ -191,16 +191,51 @@ function cloneDirectory(source: string, destination: string): void {
   mkdirSync(dirname(destination), { recursive: true });
   try {
     if (process.platform === "darwin") {
-      cpSync(source, destination, {
-        recursive: true,
-        verbatimSymlinks: true,
-        mode: constants.COPYFILE_FICLONE
-      });
-      return;
+      assertCopyOnWriteAvailable(source, dirname(destination));
+      try {
+        cpSync(source, destination, {
+          recursive: true,
+          verbatimSymlinks: true,
+          mode: copyOnWriteMode()
+        });
+        return;
+      } catch (error) {
+        if (error instanceof IsolateError) {
+          throw error;
+        }
+        throw new IsolateError(
+          "The project must be on APFS on the same volume as ~/.fission/worktrees."
+        );
+      }
     }
     cpSync(source, destination, { recursive: true, verbatimSymlinks: true });
-  } catch {
+  } catch (error) {
+    if (error instanceof IsolateError) {
+      throw error;
+    }
     throw new IsolateError("The project folder could not be copied.");
+  }
+}
+
+function copyOnWriteMode(): number {
+  const flags = constants as unknown as Record<string, number | undefined>;
+  return flags.COPYFILE_FICLONE_FORCE ?? flags.COPYFILE_FICLONE ?? 0;
+}
+
+function assertCopyOnWriteAvailable(source: string, destinationParent: string): void {
+  try {
+    const sourceDevice = statSync(source).dev;
+    mkdirSync(destinationParent, { recursive: true });
+    const destinationDevice = statSync(destinationParent).dev;
+    if (sourceDevice !== destinationDevice) {
+      throw new IsolateError(
+        "The project must be on APFS on the same volume as ~/.fission/worktrees."
+      );
+    }
+  } catch (error) {
+    if (error instanceof IsolateError) {
+      throw error;
+    }
   }
 }
 
